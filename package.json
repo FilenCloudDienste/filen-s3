@@ -1,0 +1,66 @@
+{
+	"name": "@filen/s3",
+	"version": "0.1.0",
+	"description": "Filen S3",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"private": false,
+	"scripts": {
+		"test": "jest --forceExit ./__tests__",
+		"lint": "eslint src/**/* --ext .js,.jsx,.ts,.tsx",
+		"emitTypes": "tsc --emitDeclarationOnly",
+		"tsc": "tsc --build",
+		"clear": "rimraf ./dist",
+		"build": "npm run clear && npm run lint && npm run tsc",
+		"dev": "tsx ./dev/index.ts",
+		"yalc": "npm run build && yalc push"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/FilenCloudDienste/filen-s3.git"
+	},
+	"keywords": [
+		"filen"
+	],
+	"engines": {
+		"node": ">=18"
+	},
+	"author": "Filen",
+	"license": "AGPLv3",
+	"bugs": {
+		"url": "https://github.com/FilenCloudDienste/filen-s3/issues"
+	},
+	"homepage": "https://filen.io",
+	"devDependencies": {
+		"@jest/globals": "^29.7.0",
+		"@types/express": "^4.17.21",
+		"@types/fs-extra": "^11.0.4",
+		"@types/lodash": "^4.14.202",
+		"@types/mime-types": "^2.1.4",
+		"@types/uuid": "^9.0.8",
+		"@types/xml2js": "^0.4.14",
+		"@typescript-eslint/eslint-plugin": "^6.20.0",
+		"@typescript-eslint/parser": "^6.20.0",
+		"cross-env": "^7.0.3",
+		"eslint": "^8.56.0",
+		"jest": "^29.7.0",
+		"rimraf": "^5.0.5",
+		"ts-node": "^10.9.2",
+		"tsx": "^4.11.0",
+		"typescript": "^5.3.3"
+	},
+	"dependencies": {
+		"@filen/sdk": "^0.1.115",
+		"aws-sdk": "^2.1636.0",
+		"body-parser": "^1.20.2",
+		"dayjs": "^1.11.11",
+		"express": "^4.19.2",
+		"express-async-handler": "^1.2.0",
+		"fs-extra": "^11.2.0",
+		"mime-types": "^2.1.35",
+		"selfsigned": "^2.4.1",
+		"uuid": "^9.0.1",
+		"xml-js-builder": "^1.0.3",
+		"xml2js": "^0.6.2"
+	}
+}

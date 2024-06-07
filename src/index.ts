@@ -7,6 +7,9 @@ import Errors from "./middlewares/errors"
 import Auth from "./middlewares/auth"
 import asyncHandler from "express-async-handler"
 import ListBuckets from "./handlers/listBuckets"
+import ListObjectsV2 from "./handlers/listObjectsV2"
+import GetObject from "./handlers/getObject"
+import HeadObject from "./handlers/headObject"
 
 export type ServerConfig = {
 	hostname: string
@@ -28,6 +31,7 @@ export class S3Server {
 	public readonly sdk: FilenSDK
 	public readonly region = "filen"
 	public readonly service = "s3"
+	public readonly bucketName = "default"
 
 	public constructor({
 		hostname = "127.0.0.1",
@@ -83,6 +87,9 @@ export class S3Server {
 		//this.server.use(asyncHandler(new Auth(this).handle))
 
 		this.server.get("/", asyncHandler(new ListBuckets(this).handle))
+		this.server.get(`/${this.bucketName}`, asyncHandler(new ListObjectsV2(this).handle))
+		this.server.get(`/${this.bucketName}/:key`, asyncHandler(new GetObject(this).handle))
+		this.server.head(`/${this.bucketName}/:key`, asyncHandler(new HeadObject(this).handle))
 
 		this.server.use(Errors)
 

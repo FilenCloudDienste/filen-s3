@@ -12,7 +12,7 @@ export class ListBuckets {
 			res,
 			[
 				{
-					name: "default",
+					name: this.server.bucketName,
 					creationDate: Date.now()
 				}
 			],

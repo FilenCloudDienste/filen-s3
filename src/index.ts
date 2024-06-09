@@ -1,5 +1,5 @@
 import express, { type Express } from "express"
-import FilenSDK, { type FilenSDKConfig } from "@filen/sdk"
+import FilenSDK, { type FilenSDKConfig, type FSStats } from "@filen/sdk"
 import bodyParser from "body-parser"
 import https from "https"
 import Certs from "./certs"
@@ -10,6 +10,9 @@ import ListBuckets from "./handlers/listBuckets"
 import ListObjectsV2 from "./handlers/listObjectsV2"
 import GetObject from "./handlers/getObject"
 import HeadObject from "./handlers/headObject"
+import DeleteObject from "./handlers/deleteObject"
+import PutObject from "./handlers/putObject"
+import { normalizeKey } from "./utils"
 
 export type ServerConfig = {
 	hostname: string
@@ -59,6 +62,21 @@ export class S3Server {
 		this.server = express()
 	}
 
+	public async getObject(key: string): Promise<{ exists: false } | { exists: true; stats: FSStats }> {
+		try {
+			const stats = await this.sdk.fs().stat({ path: normalizeKey(key) })
+
+			return {
+				exists: true,
+				stats
+			}
+		} catch {
+			return {
+				exists: false
+			}
+		}
+	}
+
 	public async start(): Promise<void> {
 		this.server.disable("x-powered-by")
 
@@ -90,6 +108,8 @@ export class S3Server {
 		this.server.get(`/${this.bucketName}`, asyncHandler(new ListObjectsV2(this).handle))
 		this.server.get(`/${this.bucketName}/:key`, asyncHandler(new GetObject(this).handle))
 		this.server.head(`/${this.bucketName}/:key`, asyncHandler(new HeadObject(this).handle))
+		this.server.delete(`/${this.bucketName}/:key`, asyncHandler(new DeleteObject(this).handle))
+		this.server.put(`/${this.bucketName}/:key`, asyncHandler(new PutObject(this).handle))
 
 		this.server.use(Errors)
 

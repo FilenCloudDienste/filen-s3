@@ -7,7 +7,7 @@ export class ListBuckets {
 		this.handle = this.handle.bind(this)
 	}
 
-	public async handle(req: Request, res: Response): Promise<void> {
+	public async handle(_: Request, res: Response): Promise<void> {
 		await Responses.listBuckets(
 			res,
 			[

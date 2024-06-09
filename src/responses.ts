@@ -1,7 +1,7 @@
 import { type Response } from "express"
 import { Builder } from "xml2js"
-import { type FSStats } from "@filen/sdk"
-import pathModule from "path"
+import { type FSStatsObject } from "./handlers/listObjectsV2"
+import crypto from "crypto"
 
 export class Responses {
 	public static readonly xmlBuilder = new Builder({
@@ -28,8 +28,8 @@ export class Responses {
 					}
 				})),
 				Owner: {
-					ID: owner.id,
-					DisplayName: owner.displayName
+					ID: crypto.createHash("sha256").update(owner.id).digest("hex"),
+					DisplayName: ""
 				}
 			}
 		})
@@ -64,23 +64,22 @@ export class Responses {
 		})
 	}
 
-	public static async listObjectsV2(res: Response, path: string, prefix: string, objects: FSStats[]): Promise<void> {
+	public static async listObjectsV2(res: Response, prefix: string, objects: FSStatsObject[]): Promise<void> {
 		const response = this.xmlBuilder.buildObject({
 			ListBucketResult: {
 				IsTruncated: false,
 				Contents: objects.map(object => ({
-					Key: path === "/" ? object.name : pathModule.posix.join(path, object.name),
+					Key: object.path.slice(1),
 					LastModified: new Date(object.mtimeMs).toISOString(),
 					Size: object.size.toString(),
-					ETag: object.uuid,
-					StorageClass: "default"
+					ETag: `"${object.uuid}"`,
+					StorageClass: "STANDARD",
+					ChecksumAlgorithm: []
 				})),
+				CommonPrefixes: [],
 				KeyCount: objects.length.toString(),
-				ContinuationToken: "",
-				NextContinuationToken: "",
 				Prefix: prefix,
-				StartAfter: "",
-				MaxKeys: Number.MAX_SAFE_INTEGER.toString()
+				Delimeter: "/"
 			}
 		})
 
@@ -98,6 +97,28 @@ export class Responses {
 	public static async ok(res: Response): Promise<void> {
 		res.set("Content-Length", "0")
 		res.status(200)
+
+		await new Promise<void>(resolve => {
+			res.end(() => {
+				resolve()
+			})
+		})
+	}
+
+	public static async noContent(res: Response): Promise<void> {
+		res.set("Content-Length", "0")
+		res.status(204)
+
+		await new Promise<void>(resolve => {
+			res.end(() => {
+				resolve()
+			})
+		})
+	}
+
+	public static async badRequest(res: Response): Promise<void> {
+		res.set("Content-Length", "0")
+		res.status(400)
 
 		await new Promise<void>(resolve => {
 			res.end(() => {

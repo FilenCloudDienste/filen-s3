@@ -1,7 +1,7 @@
 import { type Request, type Response } from "express"
 import Responses from "../responses"
 import type Server from "../"
-import { type FSStats } from "@filen/sdk"
+import { parseByteRange } from "../utils"
 import mimeTypes from "mime-types"
 
 export class HeadObject {
@@ -18,27 +18,48 @@ export class HeadObject {
 			return
 		}
 
-		let object: FSStats | null = null
+		const object = await this.server.getObject(key)
 
-		try {
-			object = await this.server.sdk.fs().stat({ path: `/${key}` })
-		} catch {
+		if (!object.exists || object.stats.type === "directory") {
 			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 
 			return
 		}
 
-		if (!object || object.type === "directory") {
-			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+		const mimeType = mimeTypes.lookup(object.stats.name) || "application/octet-stream"
+		const totalLength = object.stats.size
+		const range = req.headers.range || req.headers["content-range"]
+		let start = 0
+		let end = totalLength - 1
 
-			return
+		if (range) {
+			const parsedRange = parseByteRange(range, totalLength)
+
+			if (!parsedRange) {
+				res.status(400).end()
+
+				return
+			}
+
+			start = parsedRange.start
+			end = parsedRange.end
+
+			res.status(206)
+			res.set("Content-Range", `bytes ${start}-${end}/${totalLength}`)
+			res.set("Content-Length", (end - start + 1).toString())
+		} else {
+			res.status(200)
+			res.set("Content-Length", object.stats.size.toString())
 		}
 
-		res.set("Content-Type", mimeTypes.lookup(object.name) || "application/octet-stream")
-		res.set("Content-Disposition", `attachment; filename="${object.name}"`)
-		res.set("Content-Length", object.size.toString())
+		res.set("Content-Type", mimeType)
+		res.set("Accept-Ranges", "bytes")
 
-		await Responses.ok(res)
+		await new Promise<void>(resolve => {
+			res.end(() => {
+				resolve()
+			})
+		})
 	}
 }
 

@@ -1,10 +1,10 @@
 import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
-import { type FSStats } from "@filen/sdk"
 import { Readable } from "stream"
 import { type ReadableStream as ReadableStreamWebType } from "stream/web"
 import mimeTypes from "mime-types"
+import { parseByteRange } from "../utils"
 
 export class GetObject {
 	public constructor(private readonly server: Server) {
@@ -20,38 +20,57 @@ export class GetObject {
 			return
 		}
 
-		let object: FSStats | null = null
+		const object = await this.server.getObject(key)
 
-		try {
-			object = await this.server.sdk.fs().stat({ path: `/${key}` })
-		} catch {
+		if (!object.exists || object.stats.type === "directory") {
 			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 
 			return
 		}
 
-		if (!object || object.type === "directory") {
-			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+		const mimeType = mimeTypes.lookup(object.stats.name) || "application/octet-stream"
+		const totalLength = object.stats.size
+		const range = req.headers.range || req.headers["content-range"]
+		let start = 0
+		let end = totalLength - 1
 
-			return
+		if (range) {
+			const parsedRange = parseByteRange(range, totalLength)
+
+			if (!parsedRange) {
+				await Responses.badRequest(res)
+
+				return
+			}
+
+			start = parsedRange.start
+			end = parsedRange.end
+
+			res.status(206)
+			res.set("Content-Range", `bytes ${start}-${end}/${totalLength}`)
+			res.set("Content-Length", (end - start + 1).toString())
+		} else {
+			res.status(200)
+			res.set("Content-Length", object.stats.size.toString())
 		}
+
+		res.set("Content-Disposition", `attachment; filename="${object.stats.name}"`)
+		res.set("Content-Type", mimeType)
+		res.set("Accept-Ranges", "bytes")
 
 		const stream = await this.server.sdk.cloud().downloadFileToReadableStream({
-			uuid: object.uuid,
-			bucket: object.bucket,
-			region: object.region,
-			version: object.version,
-			key: object.key,
-			size: object.size,
-			chunks: object.chunks
+			uuid: object.stats.uuid,
+			bucket: object.stats.bucket,
+			region: object.stats.region,
+			version: object.stats.version,
+			key: object.stats.key,
+			size: object.stats.size,
+			chunks: object.stats.chunks,
+			start,
+			end
 		})
 
 		const nodeStream = Readable.fromWeb(stream as unknown as ReadableStreamWebType<Buffer>)
-
-		res.set("Content-Type", mimeTypes.lookup(object.name) || "application/octet-stream")
-		res.set("Content-Disposition", `attachment; filename="${object.name}"`)
-		res.set("Content-Length", object.size.toString())
-		res.status(200)
 
 		nodeStream.once("error", next)
 

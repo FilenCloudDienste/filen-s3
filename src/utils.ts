@@ -64,3 +64,85 @@ export function platformConfigPath(): string {
 
 	return configPath
 }
+
+/**
+ * Chunk large Promise.allSettled executions.
+ * @date 3/5/2024 - 12:41:08 PM
+ *
+ * @export
+ * @async
+ * @template T
+ * @param {Promise<T>[]} promises
+ * @param {number} [chunkSize=100000]
+ * @returns {Promise<T[]>}
+ */
+export async function promiseAllSettledChunked<T>(promises: Promise<T>[], chunkSize = 100000): Promise<T[]> {
+	const results: T[] = []
+
+	for (let i = 0; i < promises.length; i += chunkSize) {
+		const chunkPromisesSettled = await Promise.allSettled(promises.slice(i, i + chunkSize))
+		const chunkResults = chunkPromisesSettled.reduce((acc: T[], current) => {
+			if (current.status === "fulfilled") {
+				acc.push(current.value)
+			} else {
+				// Handle rejected promises or do something with the error (current.reason)
+			}
+
+			return acc
+		}, [])
+
+		results.push(...chunkResults)
+	}
+
+	return results
+}
+
+/**
+ * Parse the requested byte range from the header.
+ *
+ * @export
+ * @param {string} range
+ * @param {number} totalLength
+ * @returns {({ start: number; end: number } | null)}
+ */
+export function parseByteRange(range: string, totalLength: number): { start: number; end: number } | null {
+	const [unit, rangeValue] = range.split("=")
+
+	if (unit !== "bytes" || !rangeValue) {
+		return null
+	}
+
+	const [startStr, endStr] = rangeValue.split("-")
+
+	if (!startStr) {
+		return null
+	}
+
+	const start = parseInt(startStr, 10)
+	const end = endStr ? parseInt(endStr, 10) : totalLength - 1
+
+	if (isNaN(start) || isNaN(end) || start < 0 || end >= totalLength || start > end) {
+		return null
+	}
+
+	return { start, end }
+}
+
+/**
+ * Normalize an object key so we can use it in the SDK.
+ *
+ * @export
+ * @param {string} key
+ * @returns {string}
+ */
+export function normalizeKey(key: string): string {
+	if (!key.startsWith("/")) {
+		key = `/${key}`
+	}
+
+	if (key.endsWith("/")) {
+		key = key.substring(0, key.length - 1)
+	}
+
+	return key
+}

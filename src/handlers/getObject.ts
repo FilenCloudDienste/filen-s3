@@ -4,7 +4,7 @@ import type Server from "../"
 import { Readable } from "stream"
 import { type ReadableStream as ReadableStreamWebType } from "stream/web"
 import mimeTypes from "mime-types"
-import { parseByteRange } from "../utils"
+import { parseByteRange, extractKeyFromRequestParams } from "../utils"
 
 export class GetObject {
 	public constructor(private readonly server: Server) {
@@ -12,14 +12,13 @@ export class GetObject {
 	}
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
-		const key = req.params.key
-
-		if (typeof key !== "string") {
+		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
 			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 
 			return
 		}
 
+		const key = extractKeyFromRequestParams(req)
 		const object = await this.server.getObject(key)
 
 		if (!object.exists || object.stats.type === "directory") {

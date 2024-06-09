@@ -2,7 +2,7 @@ import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
 import pathModule from "path"
-import { normalizeKey } from "../utils"
+import { normalizeKey, extractKeyFromRequestParams } from "../utils"
 
 export class PutObject {
 	public constructor(private readonly server: Server) {
@@ -10,14 +10,15 @@ export class PutObject {
 	}
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
-		const key = req.params.key
+		//const isCopy = typeof req.headers["x-amz-copy-source"] === "string" && req.headers["x-amz-copy-source"].length > 0
 
-		if (typeof key !== "string") {
-			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
+		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
+			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 
 			return
 		}
 
+		const key = extractKeyFromRequestParams(req)
 		const path = normalizeKey(key)
 		const parentPath = pathModule.posix.dirname(path)
 		const name = pathModule.posix.basename(path)

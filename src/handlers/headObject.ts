@@ -1,7 +1,7 @@
 import { type Request, type Response } from "express"
 import Responses from "../responses"
 import type Server from "../"
-import { parseByteRange } from "../utils"
+import { parseByteRange, extractKeyFromRequestParams } from "../utils"
 import mimeTypes from "mime-types"
 
 export class HeadObject {
@@ -10,14 +10,13 @@ export class HeadObject {
 	}
 
 	public async handle(req: Request, res: Response): Promise<void> {
-		const key = req.params.key
-
-		if (typeof key !== "string") {
+		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
 			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 
 			return
 		}
 
+		const key = extractKeyFromRequestParams(req)
 		const object = await this.server.getObject(key)
 
 		if (!object.exists || object.stats.type === "directory") {

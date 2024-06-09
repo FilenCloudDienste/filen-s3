@@ -106,10 +106,10 @@ export class S3Server {
 
 		this.server.get("/", asyncHandler(new ListBuckets(this).handle))
 		this.server.get(`/${this.bucketName}`, asyncHandler(new ListObjectsV2(this).handle))
-		this.server.get(`/${this.bucketName}/:key`, asyncHandler(new GetObject(this).handle))
-		this.server.head(`/${this.bucketName}/:key`, asyncHandler(new HeadObject(this).handle))
-		this.server.delete(`/${this.bucketName}/:key`, asyncHandler(new DeleteObject(this).handle))
-		this.server.put(`/${this.bucketName}/:key`, asyncHandler(new PutObject(this).handle))
+		this.server.get(`/${this.bucketName}/:key*`, asyncHandler(new GetObject(this).handle))
+		this.server.head(`/${this.bucketName}/:key*`, asyncHandler(new HeadObject(this).handle))
+		this.server.delete(`/${this.bucketName}/:key*`, asyncHandler(new DeleteObject(this).handle))
+		this.server.put(`/${this.bucketName}/:key*`, asyncHandler(new PutObject(this).handle))
 
 		this.server.use(Errors)
 

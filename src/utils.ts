@@ -1,6 +1,7 @@
 import pathModule from "path"
 import fs from "fs-extra"
 import os from "os"
+import { type Request } from "express"
 
 /**
  * Chunk large Promise.all executions.
@@ -136,6 +137,12 @@ export function parseByteRange(range: string, totalLength: number): { start: num
  * @returns {string}
  */
 export function normalizeKey(key: string): string {
+	key = key.trim()
+
+	if (key.length === 0 || key === "./" || key === "../" || key === "/") {
+		return "/"
+	}
+
 	if (!key.startsWith("/")) {
 		key = `/${key}`
 	}
@@ -145,4 +152,21 @@ export function normalizeKey(key: string): string {
 	}
 
 	return key
+}
+
+/**
+ * Extract the key parameter from the express router request.
+ *
+ * @export
+ * @param {Request} req
+ * @returns {string}
+ */
+export function extractKeyFromRequestParams(req: Request): string {
+	const base = req.params.key
+
+	if (typeof base !== "string" || base.length === 0) {
+		throw new Error("Invalid key parameter.")
+	}
+
+	return typeof req.params["0"] === "string" && req.params["0"].length > 0 ? pathModule.posix.join(base, req.params["0"]) : base
 }

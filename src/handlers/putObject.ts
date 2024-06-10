@@ -66,7 +66,29 @@ export class PutObject {
 		})
 	}
 
+	public async mkdir(req: Request, res: Response): Promise<void> {
+		const key = extractKeyFromRequestParams(req)
+		const path = normalizeKey(key)
+		const thisObject = await this.server.getObject(key)
+
+		if (thisObject.exists) {
+			await Responses.ok(res)
+
+			return
+		}
+
+		await this.server.sdk.fs().mkdir({ path })
+
+		await Responses.ok(res)
+	}
+
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
+		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
+			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
+
+			return
+		}
+
 		const isCopy = typeof req.headers["x-amz-copy-source"] === "string" && req.headers["x-amz-copy-source"].length > 0
 
 		if (isCopy) {
@@ -75,14 +97,14 @@ export class PutObject {
 			return
 		}
 
-		if (!req.bodyStream || !req.bodySize || req.bodySize === 0) {
-			await Responses.error(res, 400, "BadRequest", "Invalid body stream.")
+		if (req.url.trim().endsWith("/") && req.bodySize === 0) {
+			await this.mkdir(req, res)
 
 			return
 		}
 
-		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
-			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
+		if (!req.bodyStream || !req.bodySize || req.bodySize === 0) {
+			await Responses.error(res, 400, "BadRequest", "Invalid body stream.")
 
 			return
 		}

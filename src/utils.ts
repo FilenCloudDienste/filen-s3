@@ -168,5 +168,7 @@ export function extractKeyFromRequestParams(req: Request): string {
 		throw new Error("Invalid key parameter.")
 	}
 
-	return typeof req.params["0"] === "string" && req.params["0"].length > 0 ? pathModule.posix.join(base, req.params["0"]) : base
+	return typeof req.params["0"] === "string" && req.params["0"].length > 0
+		? pathModule.posix.join(decodeURI(base), decodeURI(req.params["0"]))
+		: base
 }

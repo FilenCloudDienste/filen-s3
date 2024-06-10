@@ -30,7 +30,6 @@ export type User = {
 export class S3Server {
 	public readonly server: Express
 	public readonly serverConfig: ServerConfig
-	public readonly proxyMode: boolean
 	public readonly user: User
 	public readonly sdk: FilenSDK
 	public readonly region = "filen"
@@ -57,7 +56,6 @@ export class S3Server {
 			port,
 			https
 		}
-		this.proxyMode = typeof user === "undefined"
 		this.user = user
 		this.sdk = new FilenSDK(user.sdkConfig)
 		this.server = express()

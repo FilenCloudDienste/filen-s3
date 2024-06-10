@@ -2,7 +2,7 @@ import { type Request, type Response, type NextFunction } from "express"
 import crypto from "crypto"
 import { PassThrough } from "stream"
 
-export default function bodyHash(req: Request, res: Response, next: NextFunction): void {
+export default function body(req: Request, res: Response, next: NextFunction): void {
 	const hash = crypto.createHash("sha256")
 	const passThrough = new PassThrough()
 	let size = 0

@@ -10,6 +10,10 @@ import Responses from "../responses"
  * @returns {void}
  */
 export const Errors: ErrorRequestHandler = (err, req, res): void => {
+	if (!err) {
+		return
+	}
+
 	Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 }
 

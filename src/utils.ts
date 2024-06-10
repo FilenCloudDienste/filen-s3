@@ -2,6 +2,8 @@ import pathModule from "path"
 import fs from "fs-extra"
 import os from "os"
 import { type Request } from "express"
+import { parseString } from "xml2js"
+import { type Readable } from "stream"
 
 /**
  * Chunk large Promise.all executions.
@@ -171,4 +173,38 @@ export function extractKeyFromRequestParams(req: Request): string {
 	return typeof req.params["0"] === "string" && req.params["0"].length > 0
 		? pathModule.posix.join(decodeURI(base), decodeURI(req.params["0"]))
 		: base
+}
+
+export function streamToBuffer(stream: Readable): Promise<Buffer> {
+	return new Promise<Buffer>((resolve, reject) => {
+		const buffers: Buffer[] = []
+
+		stream.on("data", chunk => {
+			buffers.push(chunk)
+		})
+
+		stream.on("end", () => {
+			resolve(Buffer.concat(buffers))
+		})
+
+		stream.on("error", reject)
+	})
+}
+
+export function streamToXML<T>(stream: Readable): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		streamToBuffer(stream)
+			.then(requestBuffer => {
+				parseString(requestBuffer.toString("utf-8"), { explicitArray: false }, (err, result) => {
+					if (err) {
+						reject(err)
+
+						return
+					}
+
+					resolve(result as T)
+				})
+			})
+			.catch(reject)
+	})
 }

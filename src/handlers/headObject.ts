@@ -1,4 +1,4 @@
-import { type Request, type Response } from "express"
+import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
 import { parseByteRange, extractKeyFromRequestParams } from "../utils"
@@ -9,7 +9,13 @@ export class HeadObject {
 		this.handle = this.handle.bind(this)
 	}
 
-	public async handle(req: Request, res: Response): Promise<void> {
+	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
+		if (req.url.includes("?")) {
+			next()
+
+			return
+		}
+
 		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
 			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 

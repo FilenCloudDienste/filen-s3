@@ -12,6 +12,12 @@ export class GetObject {
 	}
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
+		if (req.url.includes("?")) {
+			next()
+
+			return
+		}
+
 		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
 			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 

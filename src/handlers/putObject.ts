@@ -18,7 +18,13 @@ export class PutObject {
 			return
 		}
 
-		const copyObject = await this.server.getObject(copySource)
+		const copySourceDecoded = decodeURI(copySource)
+		const copySourceNormalized = copySourceDecoded.startsWith(`/${this.server.bucketName}/`)
+			? copySourceDecoded.slice(`/${this.server.bucketName}/`.length)
+			: copySourceDecoded.startsWith(`${this.server.bucketName}/`)
+			? copySourceDecoded.slice(`${this.server.bucketName}/`.length)
+			: copySourceDecoded
+		const copyObject = await this.server.getObject(copySourceNormalized)
 
 		if (!copyObject.exists || copyObject.stats.type === "directory") {
 			await Responses.error(res, 412, "PreconditionFailed", "Copy source does not exist.")
@@ -48,7 +54,7 @@ export class PutObject {
 		}
 
 		await this.server.sdk.fs().copy({
-			from: normalizeKey(copySource),
+			from: normalizeKey(copySourceNormalized),
 			to: normalizeKey(key)
 		})
 
@@ -83,6 +89,12 @@ export class PutObject {
 	}
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
+		if (req.url.includes("?")) {
+			next()
+
+			return
+		}
+
 		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
 			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
 

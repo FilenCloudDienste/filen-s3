@@ -64,7 +64,7 @@ export class Responses {
 		})
 	}
 
-	public static async listObjectsV2(res: Response, prefix: string, objects: FSStatsObject[]): Promise<void> {
+	public static async listObjectsV2(res: Response, prefix: string, objects: FSStatsObject[], commonPrefixes: string[]): Promise<void> {
 		const response = this.xmlBuilder.buildObject({
 			ListBucketResult: {
 				IsTruncated: false,
@@ -76,7 +76,9 @@ export class Responses {
 					StorageClass: "STANDARD",
 					ChecksumAlgorithm: []
 				})),
-				CommonPrefixes: [],
+				CommonPrefixes: commonPrefixes.map(prefix => ({
+					Prefix: prefix
+				})),
 				KeyCount: objects.length.toString(),
 				Prefix: prefix,
 				Delimeter: "/"

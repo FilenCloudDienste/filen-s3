@@ -30,7 +30,7 @@ export class ListObjectsV2 {
 	 * @returns {string}
 	 */
 	private normalizePrefix(prefix: string): string {
-		let trimmed = prefix.trim()
+		let trimmed = decodeURI(prefix).trim()
 
 		if (trimmed.length === 0 || trimmed === "/" || trimmed.startsWith("./") || trimmed.startsWith("../") || trimmed.includes("../")) {
 			return "/"
@@ -50,14 +50,19 @@ export class ListObjectsV2 {
 	public async handle(req: Request, res: Response): Promise<void> {
 		const params = this.parseQueryParams(req)
 		const normalizedPrefix = this.normalizePrefix(params.prefix)
-		const dirname = normalizedPrefix === "/" ? "/" : pathModule.dirname(normalizedPrefix)
-		const objects: FSStatsObject[] = []
+		const dirnameObject = await this.server.getObject(normalizedPrefix)
+		const dirname =
+			normalizedPrefix === "/"
+				? "/"
+				: dirnameObject.exists && dirnameObject.stats.type === "directory"
+				? normalizedPrefix
+				: pathModule.dirname(normalizedPrefix)
 		const topLevelItems: string[] = []
 
 		const { exists: dirnameExists } = await this.server.getObject(dirname)
 
 		if (!dirnameExists) {
-			await Responses.listObjectsV2(res, params.prefix, [])
+			await Responses.listObjectsV2(res, params.prefix, [], [])
 
 			return
 		}
@@ -71,82 +76,41 @@ export class ListObjectsV2 {
 				continue
 			}
 
-			topLevelItems.push(itemPath)
+			topLevelItems.push(item)
 		}
 
-		const promises: Promise<void>[] = []
-
-		for (const path of topLevelItems) {
-			promises.push(
-				new Promise((resolve, reject) => {
-					this.server.sdk
-						.fs()
-						.stat({ path })
-						.then(stat => {
-							if (stat.type === "file") {
-								objects.push({
-									...stat,
-									path
-								})
-
-								resolve()
-
-								return
-							}
-
+		const objects: FSStatsObject[] = (
+			await promiseAllChunked(
+				topLevelItems.map(
+					item =>
+						new Promise<FSStatsObject>((resolve, reject) => {
 							this.server.sdk
 								.fs()
-								.readdir({ path })
-								.then(contents => {
-									const innerPromises: Promise<void>[] = []
-
-									for (const item of contents) {
-										const itemPath = pathModule.posix.join(path, item)
-
-										innerPromises.push(
-											new Promise((resolve, reject) => {
-												this.server.sdk
-													.fs()
-													.stat({ path: itemPath })
-													.then(stats => {
-														if (stats.type !== "file") {
-															resolve()
-
-															return
-														}
-
-														objects.push({
-															...stats,
-															path: itemPath
-														})
-
-														resolve()
-													})
-													.catch(reject)
-											})
-										)
-									}
-
-									promiseAllChunked(innerPromises)
-										.then(() => {
-											resolve()
-										})
-										.catch(reject)
+								.stat({ path: pathModule.posix.join(dirname, item) })
+								.then(stats => {
+									resolve({
+										...stats,
+										path: pathModule.posix.join(dirname, item)
+									})
 								})
 								.catch(reject)
 						})
-						.catch(reject)
-				})
+				)
 			)
+		).sort((a, b) => a.path.length - b.path.length)
+
+		const commonPrefixes: string[] = []
+		const finalObjects: FSStatsObject[] = []
+
+		for (const object of objects) {
+			if (object.type === "directory") {
+				commonPrefixes.push(`${object.path.slice(1)}/`)
+			} else {
+				finalObjects.push(object)
+			}
 		}
 
-		await promiseAllChunked(promises)
-
-		const objectsSorted = objects
-			.sort((a, b) => a.path.length - b.path.length)
-			.filter(object => (normalizedPrefix === "/" ? !object.path.slice(1).includes("/") : true))
-
-		await Responses.listObjectsV2(res, params.prefix, objectsSorted)
+		await Responses.listObjectsV2(res, params.prefix, finalObjects, commonPrefixes)
 	}
 }
 

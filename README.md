@@ -89,7 +89,8 @@ Due to the underlying storage most methods are not possible to implement, though
       <td>
         <ul>
           <li>Only supports Prefix parameter.</li>
-          <li>Delimeter is always set to "/". Depth is always 1.</li>
+          <li>Delimeter is always set to "/".</li>
+          <li>Depth is always 0.</li>
           <li>EncodingType is always UTF-8.</li>
           <li>There are no ContinuationTokens. The server always responds with all keys matching the Prefix.</li>
         </ul>

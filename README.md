@@ -157,6 +157,19 @@ Due to the underlying storage most methods are not possible to implement, though
     </tr>
     <tr>
       <td>
+        DeleteObjects
+      </td>
+      <td>
+        ✅
+      </td>
+      <td>
+        <ul>
+          <li>Also supports deleting directories.</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>
         PutObject
       </td>
       <td>

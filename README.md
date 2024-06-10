@@ -43,7 +43,8 @@ const s3 = new S3({
 	accessKeyId: "admin",
 	secretAccessKey: "admin",
 	endpoint: "http://127.0.0.1:1700",
-	s3ForcePathStyle: true // Needed
+	s3ForcePathStyle: true, // Needed
+	region: "filen" // Needed
 })
 
 // Start the server
@@ -106,6 +107,19 @@ Only methods listed here are currently implemented.
     </tr>
     <tr>
       <td>
+        HeadBucket
+      </td>
+      <td>
+        🟥
+      </td>
+      <td>
+        <ul>
+          <li>Only returns "x-amz-bucket-region" header.</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>
         HeadObject
       </td>
       <td>
@@ -149,6 +163,19 @@ Only methods listed here are currently implemented.
       <td>
         <ul>
           <li>Only returns ETag header.</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        CopyObject
+      </td>
+      <td>
+        🟥
+      </td>
+      <td>
+        <ul>
+          <li>Only returns ETag and LastModified as the CopyObjectResult.</li>
         </ul>
       </td>
     </tr>

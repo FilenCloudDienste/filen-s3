@@ -1,6 +1,7 @@
 import crypto from "crypto"
 import { type Request, type Response, type NextFunction } from "express"
 import type Server from "../"
+import Responses from "../responses"
 
 export type AuthDetails = {
 	accessKeyId: string
@@ -10,36 +11,46 @@ export type AuthDetails = {
 }
 
 export class Auth {
-	public constructor(private readonly server: Server) {}
+	public constructor(private readonly server: Server) {
+		this.handle = this.handle.bind(this)
+	}
 
-	public getSignatureKey(key: string, date: string, region: string, service: string): Buffer {
-		const kDate = crypto
-			.createHmac("sha256", "AWS4" + key)
-			.update(date)
-			.digest()
+	public calculateSignature(stringToSign: string, date: string, region: string, service: string, secretAccessKey: string): string {
+		const kDate = crypto.createHmac("sha256", `AWS4${secretAccessKey}`).update(date).digest()
 		const kRegion = crypto.createHmac("sha256", kDate).update(region).digest()
 		const kService = crypto.createHmac("sha256", kRegion).update(service).digest()
 		const kSigning = crypto.createHmac("sha256", kService).update("aws4_request").digest()
 
-		return kSigning
+		return crypto.createHmac("sha256", kSigning).update(stringToSign).digest("hex")
 	}
 
-	public calculateSignature(authDetails: AuthDetails, secretAccessKey: string, date: string, region: string, service: string): string {
-		const signingKey = this.getSignatureKey(secretAccessKey, date, region, service)
+	public createStringToSign(canonicalRequest: string, xAmzDate: string): string {
+		const dateStamp = xAmzDate.substring(0, 8)
+		const credentialScope = `${dateStamp}/${this.server.region}/${this.server.service}/aws4_request`
+		const canonicalRequestHash = crypto.createHash("sha256").update(canonicalRequest).digest("hex")
 
-		return crypto.createHmac("sha256", signingKey).update(authDetails.canonicalRequest).digest("hex")
+		return ["AWS4-HMAC-SHA256", xAmzDate, credentialScope, canonicalRequestHash].join("\n")
 	}
 
 	public createCanonicalRequest(req: Request, signedHeaders: string): string {
-		const headers = signedHeaders.split(";").map(h => h.trim())
-		const canonicalHeaders = headers.map(header => `${header}:${req.headers[header]}`).join("\n")
+		const headers = signedHeaders.split(";").map(h => h.trim().toLowerCase())
+		const canonicalHeaders = headers
+			.map(header => `${header}:${req.headers[header] || ""}`)
+			.filter(header => header.length > 0)
+			.join("\n")
 
-		const payloadHash = crypto
-			.createHash("sha256")
-			.update(req.body || "")
-			.digest("hex")
+		const sortedQueryParams = Object.keys(req.query)
+			.sort()
+			.map(key => `${encodeURIComponent(key)}=${encodeURIComponent(req.query[key] as string)}`)
+			.join("&")
 
-		return [req.method, req.path, req.query || "", canonicalHeaders, "", signedHeaders, payloadHash].join("\n")
+		if (!req.bodyHash) {
+			throw new Error("No body hash computed.")
+		}
+
+		const payloadHash = req.bodyHash
+
+		return [req.method.toUpperCase(), req.path, sortedQueryParams, canonicalHeaders, "", signedHeaders, payloadHash].join("\n")
 	}
 
 	public getAuthDetails(req: Request): AuthDetails {
@@ -49,8 +60,13 @@ export class Auth {
 			throw new Error("Authorization header missing")
 		}
 
-		const [, credential, signedHeaders, signature] =
-			authHeader.match(/AWS4-HMAC-SHA256 Credential=(.*), SignedHeaders=(.*), Signature=(.*)/) || []
+		const match = authHeader.match(/AWS4-HMAC-SHA256 Credential=(.*), SignedHeaders=(.*), Signature=(.*)/)
+
+		if (!match) {
+			throw new Error("Invalid Authorization header format")
+		}
+
+		const [, credential, signedHeaders, signature] = match
 
 		if (!credential || !signedHeaders || !signature) {
 			throw new Error("Invalid Authorization header format")
@@ -74,28 +90,29 @@ export class Auth {
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
 		try {
 			const authDetails = this.getAuthDetails(req)
-			const xAmzDate = req.headers["x-amz-date"]
+			const xAmzDate = req.headers["x-amz-date"] as string
 
-			if (typeof xAmzDate !== "string") {
+			if (!xAmzDate) {
 				throw new Error("Invalid x-amz-date header")
 			}
 
 			const date = xAmzDate.substring(0, 8)
+			const stringToSign = this.createStringToSign(authDetails.canonicalRequest, xAmzDate)
 			const signature = this.calculateSignature(
-				authDetails,
-				this.server.user.secretKeyId,
+				stringToSign,
 				date,
 				this.server.region,
-				this.server.service
+				this.server.service,
+				this.server.user.secretKeyId
 			)
 
 			if (authDetails.accessKeyId !== this.server.user.accessKeyId || authDetails.signature !== signature) {
-				res.status(403).send("Forbidden")
+				await Responses.error(res, 403, "Forbidden", "Invalid credentials.")
 			} else {
 				next()
 			}
-		} catch (error) {
-			res.status(400).send("Bad Request")
+		} catch {
+			await Responses.error(res, 400, "BadRequest", "Invalid auth.")
 		}
 	}
 }

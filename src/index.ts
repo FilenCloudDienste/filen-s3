@@ -1,6 +1,5 @@
 import express, { type Express } from "express"
 import FilenSDK, { type FilenSDKConfig, type FSStats } from "@filen/sdk"
-import bodyParser from "body-parser"
 import https from "https"
 import Certs from "./certs"
 import Errors from "./middlewares/errors"
@@ -13,6 +12,8 @@ import HeadObject from "./handlers/headObject"
 import DeleteObject from "./handlers/deleteObject"
 import PutObject from "./handlers/putObject"
 import { normalizeKey } from "./utils"
+import bodyHash from "./middlewares/bodyHash"
+import HeadBucket from "./handlers/headBucket"
 
 export type ServerConfig = {
 	hostname: string
@@ -90,22 +91,12 @@ export class S3Server {
 			next()
 		})
 
-		this.server.use((req, res, next) => {
-			const method = req.method.toUpperCase()
-
-			if (method === "POST" || method === "PUT") {
-				next()
-
-				return
-			}
-
-			bodyParser.text({ type: ["application/xml", "text/xml"] })(req, res, next)
-		})
-
-		//this.server.use(asyncHandler(new Auth(this).handle))
+		this.server.use(bodyHash)
+		this.server.use(asyncHandler(new Auth(this).handle))
 
 		this.server.get("/", asyncHandler(new ListBuckets(this).handle))
 		this.server.get(`/${this.bucketName}`, asyncHandler(new ListObjectsV2(this).handle))
+		this.server.head(`/${this.bucketName}`, asyncHandler(new HeadBucket(this).handle))
 		this.server.get(`/${this.bucketName}/:key*`, asyncHandler(new GetObject(this).handle))
 		this.server.head(`/${this.bucketName}/:key*`, asyncHandler(new HeadObject(this).handle))
 		this.server.delete(`/${this.bucketName}/:key*`, asyncHandler(new DeleteObject(this).handle))

@@ -94,6 +94,25 @@ export class Responses {
 		})
 	}
 
+	public static async copyObject(res: Response, result: { eTag: string; lastModified: number }): Promise<void> {
+		const response = this.xmlBuilder.buildObject({
+			CopyObjectResult: {
+				ETag: result.eTag,
+				LastModified: new Date(result.lastModified).toISOString()
+			}
+		})
+
+		res.set("Content-Type", "application/xml; charset=utf-8")
+		res.set("Content-Length", Buffer.from(response, "utf-8").byteLength.toString())
+		res.status(200)
+
+		await new Promise<void>(resolve => {
+			res.end(response, () => {
+				resolve()
+			})
+		})
+	}
+
 	public static async ok(res: Response): Promise<void> {
 		res.set("Content-Length", "0")
 		res.status(200)

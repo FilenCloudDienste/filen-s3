@@ -9,11 +9,80 @@ export class PutObject {
 		this.handle = this.handle.bind(this)
 	}
 
+	public async copy(req: Request, res: Response): Promise<void> {
+		const copySource = req.headers["x-amz-copy-source"]
+
+		if (typeof copySource !== "string" || copySource.length === 0) {
+			await Responses.error(res, 400, "BadRequest", "Invalid copy source.")
+
+			return
+		}
+
+		const copyObject = await this.server.getObject(copySource)
+
+		if (!copyObject.exists || copyObject.stats.type === "directory") {
+			await Responses.error(res, 412, "PreconditionFailed", "Copy source does not exist.")
+
+			return
+		}
+
+		const key = extractKeyFromRequestParams(req)
+		const path = normalizeKey(key)
+		const parentPath = pathModule.posix.dirname(path)
+		const thisObject = await this.server.getObject(key)
+
+		if (thisObject.exists && thisObject.stats.type === "directory") {
+			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
+
+			return
+		}
+
+		await this.server.sdk.fs().mkdir({ path: parentPath })
+
+		const parentObject = await this.server.getObject(parentPath)
+
+		if (!parentObject.exists || parentObject.stats.type !== "directory") {
+			await Responses.error(res, 412, "PreconditionFailed", "Parent directory does not exist.")
+
+			return
+		}
+
+		await this.server.sdk.fs().copy({
+			from: normalizeKey(copySource),
+			to: normalizeKey(key)
+		})
+
+		const copiedObject = await this.server.getObject(key)
+
+		if (!copiedObject.exists || copiedObject.stats.type === "directory") {
+			await Responses.error(res, 500, "InternalError", "Internal server error.")
+
+			return
+		}
+
+		await Responses.copyObject(res, {
+			eTag: copiedObject.stats.uuid,
+			lastModified: copiedObject.stats.lastModified
+		})
+	}
+
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
-		//const isCopy = typeof req.headers["x-amz-copy-source"] === "string" && req.headers["x-amz-copy-source"].length > 0
+		const isCopy = typeof req.headers["x-amz-copy-source"] === "string" && req.headers["x-amz-copy-source"].length > 0
+
+		if (isCopy) {
+			await this.copy(req, res)
+
+			return
+		}
+
+		if (!req.bodyStream || !req.bodySize || req.bodySize === 0) {
+			await Responses.error(res, 400, "BadRequest", "Invalid body stream.")
+
+			return
+		}
 
 		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
-			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
 
 			return
 		}
@@ -42,7 +111,7 @@ export class PutObject {
 
 		let didError = false
 		const item = await this.server.sdk.cloud().uploadLocalFileStream({
-			source: req,
+			source: req.bodyStream,
 			parent: parentObject.stats.uuid,
 			name,
 			onError: err => {

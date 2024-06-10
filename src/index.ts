@@ -35,7 +35,7 @@ export class S3Server {
 	public readonly sdk: FilenSDK
 	public readonly region = "filen"
 	public readonly service = "s3"
-	public readonly bucketName = "default"
+	public readonly bucketName = "filen"
 
 	public constructor({
 		hostname = "127.0.0.1",

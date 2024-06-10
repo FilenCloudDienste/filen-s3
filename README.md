@@ -53,7 +53,7 @@ await server.start()
 // List objects
 await s3
 	.listObjectsV2({
-		Bucket: "default",
+		Bucket: "filen",
 		Prefix: ""
 	})
 	.promise()

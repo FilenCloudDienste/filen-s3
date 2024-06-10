@@ -62,7 +62,7 @@ await s3
 ## S3 Compatibility
 
 <b>Only methods listed here are currently implemented.</b>
-Due to the underlying storage most methods are not possible to implement, though we try to implement all "fundamental" needed methods.
+Due to the underlying storage most methods are impossible to implement, though we try to implement all "fundamental" needed methods.
 
 <table>
   <thead>

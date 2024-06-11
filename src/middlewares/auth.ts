@@ -60,7 +60,7 @@ export class Auth {
 			throw new Error("Authorization header missing")
 		}
 
-		const match = authHeader.match(/AWS4-HMAC-SHA256\s*Credential=(.*?),\s*SignedHeaders=(.*?),\s*Signature=(.*)/)
+		const match = authHeader.match(/AWS4-HMAC-SHA256\s*Credential=([^,]+),\s*SignedHeaders=([^,]+),\s*Signature=([a-fA-F0-9]+)/)
 
 		if (!match) {
 			throw new Error("Invalid Authorization header format")

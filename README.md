@@ -79,6 +79,23 @@ Due to the underlying storage most methods are impossible to implement, though w
     </tr>
   </thead>
   <tbody>
+  <tr>
+      <td>
+        ListObjects
+      </td>
+      <td>
+        🟥
+      </td>
+      <td>
+        <ul>
+          <li>Only supports Prefix parameter.</li>
+          <li>Delimeter is always set to "/".</li>
+          <li>Depth is always 0.</li>
+          <li>EncodingType is always URL.</li>
+          <li>There are no Markers. The server always responds with all keys matching the Prefix.</li>
+        </ul>
+      </td>
+    </tr>
     <tr>
       <td>
         ListObjectsV2
@@ -91,7 +108,7 @@ Due to the underlying storage most methods are impossible to implement, though w
           <li>Only supports Prefix parameter.</li>
           <li>Delimeter is always set to "/".</li>
           <li>Depth is always 0.</li>
-          <li>EncodingType is always UTF-8.</li>
+          <li>EncodingType is always URL.</li>
           <li>There are no ContinuationTokens. The server always responds with all keys matching the Prefix.</li>
         </ul>
       </td>

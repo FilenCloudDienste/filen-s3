@@ -55,7 +55,7 @@ export class PutObject {
 
 		await this.server.sdk.fs().copy({
 			from: normalizeKey(copySourceNormalized),
-			to: normalizeKey(key)
+			to: path
 		})
 
 		const copiedObject = await this.server.getObject(key)

@@ -1,6 +1,6 @@
-import { type Request, type Response } from "express"
+import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
-import type Server from "../"
+import type Server from ".."
 import pathModule from "path"
 import { promiseAllChunked } from "../utils"
 import { type FSStats } from "@filen/sdk"
@@ -47,7 +47,13 @@ export class ListObjectsV2 {
 		return trimmed
 	}
 
-	public async handle(req: Request, res: Response): Promise<void> {
+	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
+		if (!req.url.includes("prefix=")) {
+			next()
+
+			return
+		}
+
 		const params = this.parseQueryParams(req)
 		const normalizedPrefix = this.normalizePrefix(params.prefix)
 		const dirnameObject = await this.server.getObject(normalizedPrefix)

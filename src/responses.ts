@@ -1,6 +1,6 @@
 import { type Response } from "express"
 import { Builder } from "xml2js"
-import { type FSStatsObject } from "./handlers/listObjectsV2"
+import { type FSStatsObject } from "./handlers/listObjects"
 import crypto from "crypto"
 
 export class Responses {

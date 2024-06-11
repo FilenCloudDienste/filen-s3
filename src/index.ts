@@ -6,7 +6,7 @@ import Errors from "./middlewares/errors"
 import Auth from "./middlewares/auth"
 import asyncHandler from "express-async-handler"
 import ListBuckets from "./handlers/listBuckets"
-import ListObjectsV2 from "./handlers/listObjectsV2"
+import ListObjects from "./handlers/listObjects"
 import GetObject from "./handlers/getObject"
 import HeadObject from "./handlers/headObject"
 import DeleteObject from "./handlers/deleteObject"
@@ -95,7 +95,7 @@ export class S3Server {
 		this.server.use(asyncHandler(new Auth(this).handle))
 
 		this.server.get("/", asyncHandler(new ListBuckets(this).handle))
-		this.server.get(`/${this.bucketName}`, asyncHandler(new ListObjectsV2(this).handle))
+		this.server.get(`/${this.bucketName}`, asyncHandler(new ListObjects(this).handle))
 		this.server.head(`/${this.bucketName}`, asyncHandler(new HeadBucket(this).handle))
 		this.server.post(`/${this.bucketName}`, asyncHandler(new DeleteObjects(this).handle))
 		this.server.get(`/${this.bucketName}/:key*`, asyncHandler(new GetObject(this).handle))

@@ -32,12 +32,13 @@ import { S3 } from "aws-sdk"
 const hostname = "127.0.0.1"
 const port = 1700
 const https = false
-const sdkConfig = // FilenSDK config object
+const sdkConfig = {} // FilenSDK config object
+const endpoint = `${https ? "https" : "http"}://${hostname === "127.0.0.1" ? "local.s3.filen.io" : hostname}:${port}`
 
 const server = new S3Server({
 	hostname,
 	port,
-  https,
+	https,
 	user: {
 		accessKeyId: "admin",
 		secretKeyId: "admin",
@@ -48,7 +49,7 @@ const server = new S3Server({
 const s3 = new S3({
 	accessKeyId: "admin",
 	secretAccessKey: "admin",
-	endpoint: "http://127.0.0.1:1700",
+	endpoint,
 	s3ForcePathStyle: true, // Needed
 	region: "filen" // Needed
 })
@@ -56,11 +57,7 @@ const s3 = new S3({
 // Start the server
 await server.start()
 
-console.log(
-  `S3 server started on ${https ? "https" : "http"}://${
-    hostname === "127.0.0.1" ? "local.s3.filen.io" : hostname
-  }:${port}`
-)
+console.log(`S3 server started on ${endpoint}`)
 
 // List objects
 await s3

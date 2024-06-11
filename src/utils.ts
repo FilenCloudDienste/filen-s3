@@ -57,7 +57,7 @@ export function platformConfigPath(): string {
 		throw new Error("Could not find homedir path.")
 	}
 
-	configPath = pathModule.join(configPath, "filen-webdav")
+	configPath = pathModule.join(configPath, "filen-s3")
 
 	if (!fs.existsSync(configPath)) {
 		fs.mkdirSync(configPath, {
@@ -175,6 +175,13 @@ export function extractKeyFromRequestParams(req: Request): string {
 		: base
 }
 
+/**
+ * Read a readable stream into a Buffer.
+ *
+ * @export
+ * @param {Readable} stream
+ * @returns {Promise<Buffer>}
+ */
 export function streamToBuffer(stream: Readable): Promise<Buffer> {
 	return new Promise<Buffer>((resolve, reject) => {
 		const buffers: Buffer[] = []
@@ -191,6 +198,14 @@ export function streamToBuffer(stream: Readable): Promise<Buffer> {
 	})
 }
 
+/**
+ * Parse a readable stream into XML.
+ *
+ * @export
+ * @template T
+ * @param {Readable} stream
+ * @returns {Promise<T>}
+ */
 export function streamToXML<T>(stream: Readable): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
 		streamToBuffer(stream)

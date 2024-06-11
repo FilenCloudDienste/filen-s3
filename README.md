@@ -29,9 +29,15 @@ npm install @filen/s3@latest
 import S3Server from "@filen/s3"
 import { S3 } from "aws-sdk"
 
+const hostname = "127.0.0.1"
+const port = 1700
+const https = false
+const sdkConfig = // FilenSDK config object
+
 const server = new S3Server({
-	hostname: "127.0.0.1",
-	port: 1700,
+	hostname,
+	port,
+  https,
 	user: {
 		accessKeyId: "admin",
 		secretKeyId: "admin",
@@ -49,6 +55,12 @@ const s3 = new S3({
 
 // Start the server
 await server.start()
+
+console.log(
+  `S3 server started on ${https ? "https" : "http"}://${
+    hostname === "127.0.0.1" ? "local.s3.filen.io" : hostname
+  }:${port}`
+)
 
 // List objects
 await s3
@@ -93,6 +105,7 @@ Due to the underlying storage most methods are impossible to implement, though w
           <li>Depth is always 0.</li>
           <li>EncodingType is always URL.</li>
           <li>There are no Markers. The server always responds with all keys matching the Prefix.</li>
+          <li>*</li>
         </ul>
       </td>
     </tr>
@@ -110,6 +123,7 @@ Due to the underlying storage most methods are impossible to implement, though w
           <li>Depth is always 0.</li>
           <li>EncodingType is always URL.</li>
           <li>There are no ContinuationTokens. The server always responds with all keys matching the Prefix.</li>
+          <li>*</li>
         </ul>
       </td>
     </tr>
@@ -145,7 +159,7 @@ Due to the underlying storage most methods are impossible to implement, though w
         ✅
       </td>
       <td>
-        &nbsp;
+        *
       </td>
     </tr>
     <tr>
@@ -156,7 +170,7 @@ Due to the underlying storage most methods are impossible to implement, though w
         ✅
       </td>
       <td>
-        &nbsp;
+        *
       </td>
     </tr>
     <tr>
@@ -194,7 +208,7 @@ Due to the underlying storage most methods are impossible to implement, though w
       </td>
       <td>
         <ul>
-          <li>Only returns ETag header.</li>
+          <li>Only returns ETag header. *</li>
         </ul>
       </td>
     </tr>
@@ -207,12 +221,14 @@ Due to the underlying storage most methods are impossible to implement, though w
       </td>
       <td>
         <ul>
-          <li>Only returns ETag and LastModified as the CopyObjectResult.</li>
+          <li>Only returns ETag and LastModified as the CopyObjectResult. *</li>
         </ul>
       </td>
     </tr>
   </tbody>
 </table>
+
+<small>\* An objects ETag is always its UUID. Since Filen is fully end-to-end encrypted there is no way to know the real MD5 file hash.</small>
 
 ## License
 

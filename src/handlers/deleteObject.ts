@@ -22,20 +22,27 @@ export class DeleteObject {
 		}
 
 		const key = extractKeyFromRequestParams(req)
-		const object = await this.server.getObject(key)
 
-		if (!object.exists) {
-			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+		await this.server.getRWMutex(key).acquire()
 
-			return
+		try {
+			const object = await this.server.getObject(key)
+
+			if (!object.exists) {
+				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+
+				return
+			}
+
+			await this.server.sdk.fs().unlink({
+				path: `/${key}`,
+				permanent: true
+			})
+
+			await Responses.noContent(res)
+		} finally {
+			this.server.getRWMutex(key).release()
 		}
-
-		await this.server.sdk.fs().unlink({
-			path: `/${key}`,
-			permanent: true
-		})
-
-		await Responses.noContent(res)
 	}
 }
 

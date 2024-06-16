@@ -16,6 +16,7 @@ import body from "./middlewares/body"
 import HeadBucket from "./handlers/headBucket"
 import DeleteObjects from "./handlers/deleteObjects"
 import Responses from "./responses"
+import { Semaphore, ISemaphore } from "./semaphore"
 
 export type ServerConfig = {
 	hostname: string
@@ -37,6 +38,7 @@ export class S3Server {
 	public readonly region = "filen"
 	public readonly service = "s3"
 	public readonly bucketName = "filen"
+	private readonly rwMutex: Record<string, ISemaphore> = {}
 
 	public constructor({
 		hostname = "127.0.0.1",
@@ -61,6 +63,14 @@ export class S3Server {
 		this.user = user
 		this.sdk = new FilenSDK(user.sdkConfig)
 		this.server = express()
+	}
+
+	public getRWMutex(path: string): ISemaphore {
+		if (!this.rwMutex[path]) {
+			this.rwMutex[path] = new Semaphore(1)
+		}
+
+		return this.rwMutex[path]!
 	}
 
 	public async getObject(key: string): Promise<{ exists: false } | { exists: true; stats: FSStats }> {

@@ -91,16 +91,6 @@ export class S3Server {
 	public async start(): Promise<void> {
 		this.server.disable("x-powered-by")
 
-		this.server.use((req, _, next) => {
-			console.log({
-				method: req.method,
-				url: req.url,
-				headers: req.headers
-			})
-
-			next()
-		})
-
 		this.server.use(body)
 		this.server.use(asyncHandler(new Auth(this).handle))
 

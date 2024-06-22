@@ -36,73 +36,58 @@ export class PutObject {
 
 		const key = extractKeyFromRequestParams(req)
 		const path = normalizeKey(key)
+		const parentPath = pathModule.posix.dirname(path)
+		const thisObject = await this.server.getObject(key)
 
-		await Promise.all([this.server.getRWMutex(path).acquire(), this.server.getRWMutex(copySourceNormalized).acquire()])
+		if (thisObject.exists && thisObject.stats.type === "directory") {
+			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
 
-		try {
-			const parentPath = pathModule.posix.dirname(path)
-			const thisObject = await this.server.getObject(key)
-
-			if (thisObject.exists && thisObject.stats.type === "directory") {
-				await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
-
-				return
-			}
-
-			await this.server.sdk.fs().mkdir({ path: parentPath })
-
-			const parentObject = await this.server.getObject(parentPath)
-
-			if (!parentObject.exists || parentObject.stats.type !== "directory") {
-				await Responses.error(res, 412, "PreconditionFailed", "Parent directory does not exist.")
-
-				return
-			}
-
-			await this.server.sdk.fs().copy({
-				from: normalizeKey(copySourceNormalized),
-				to: path
-			})
-
-			const copiedObject = await this.server.getObject(key)
-
-			if (!copiedObject.exists || copiedObject.stats.type === "directory") {
-				await Responses.error(res, 500, "InternalError", "Internal server error.")
-
-				return
-			}
-
-			await Responses.copyObject(res, {
-				eTag: copiedObject.stats.uuid,
-				lastModified: copiedObject.stats.lastModified
-			})
-		} finally {
-			this.server.getRWMutex(path).release()
-			this.server.getRWMutex(copySourceNormalized).release()
+			return
 		}
+
+		await this.server.sdk.fs().mkdir({ path: parentPath })
+
+		const parentObject = await this.server.getObject(parentPath)
+
+		if (!parentObject.exists || parentObject.stats.type !== "directory") {
+			await Responses.error(res, 412, "PreconditionFailed", "Parent directory does not exist.")
+
+			return
+		}
+
+		await this.server.sdk.fs().copy({
+			from: normalizeKey(copySourceNormalized),
+			to: path
+		})
+
+		const copiedObject = await this.server.getObject(key)
+
+		if (!copiedObject.exists || copiedObject.stats.type === "directory") {
+			await Responses.error(res, 500, "InternalError", "Internal server error.")
+
+			return
+		}
+
+		await Responses.copyObject(res, {
+			eTag: copiedObject.stats.uuid,
+			lastModified: copiedObject.stats.lastModified
+		})
 	}
 
 	public async mkdir(req: Request, res: Response): Promise<void> {
 		const key = extractKeyFromRequestParams(req)
 		const path = normalizeKey(key)
+		const thisObject = await this.server.getObject(key)
 
-		await this.server.getRWMutex(path).acquire()
-
-		try {
-			const thisObject = await this.server.getObject(key)
-
-			if (thisObject.exists) {
-				await Responses.ok(res)
-
-				return
-			}
-
-			await this.server.sdk.fs().mkdir({ path })
-
+		if (thisObject.exists) {
 			await Responses.ok(res)
-		} finally {
-			this.server.getRWMutex(path).release()
+
+			return
 		}
+
+		await this.server.sdk.fs().mkdir({ path })
+
+		await Responses.ok(res)
 	}
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -140,80 +125,73 @@ export class PutObject {
 
 		const key = extractKeyFromRequestParams(req)
 		const path = normalizeKey(key)
+		const parentPath = pathModule.posix.dirname(path)
+		const name = pathModule.posix.basename(path)
+		const thisObject = await this.server.getObject(key)
 
-		await this.server.getRWMutex(path).acquire()
+		if (thisObject.exists && thisObject.stats.type === "directory") {
+			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
 
-		try {
-			const parentPath = pathModule.posix.dirname(path)
-			const name = pathModule.posix.basename(path)
-			const thisObject = await this.server.getObject(key)
-
-			if (thisObject.exists && thisObject.stats.type === "directory") {
-				await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
-
-				return
-			}
-
-			await this.server.sdk.fs().mkdir({ path: parentPath })
-
-			const parentObject = await this.server.getObject(parentPath)
-
-			if (!parentObject.exists || parentObject.stats.type !== "directory") {
-				await Responses.error(res, 412, "PreconditionFailed", "Parent directory does not exist.")
-
-				return
-			}
-
-			let didError = false
-			const item = await this.server.sdk.cloud().uploadLocalFileStream({
-				source: req.bodyStream,
-				parent: parentObject.stats.uuid,
-				name,
-				onError: err => {
-					didError = true
-
-					next(err)
-				}
-			})
-
-			if (didError) {
-				return
-			}
-
-			if (item.type !== "file") {
-				await Responses.error(res, 500, "InternalError", "Internal server error.")
-
-				return
-			}
-
-			await this.server.sdk.fs()._removeItem({ path })
-			await this.server.sdk.fs()._addItem({
-				path,
-				item: {
-					type: "file",
-					uuid: item.uuid,
-					metadata: {
-						name,
-						size: item.size,
-						lastModified: item.lastModified,
-						creation: item.creation,
-						hash: item.hash,
-						key: item.key,
-						bucket: item.bucket,
-						region: item.region,
-						version: item.version,
-						chunks: item.chunks,
-						mime: item.mime
-					}
-				}
-			})
-
-			res.set("ETag", item.uuid)
-
-			await Responses.ok(res)
-		} finally {
-			this.server.getRWMutex(path).release()
+			return
 		}
+
+		await this.server.sdk.fs().mkdir({ path: parentPath })
+
+		const parentObject = await this.server.getObject(parentPath)
+
+		if (!parentObject.exists || parentObject.stats.type !== "directory") {
+			await Responses.error(res, 412, "PreconditionFailed", "Parent directory does not exist.")
+
+			return
+		}
+
+		let didError = false
+		const item = await this.server.sdk.cloud().uploadLocalFileStream({
+			source: req.bodyStream,
+			parent: parentObject.stats.uuid,
+			name,
+			onError: err => {
+				didError = true
+
+				next(err)
+			}
+		})
+
+		if (didError) {
+			return
+		}
+
+		if (item.type !== "file") {
+			await Responses.error(res, 500, "InternalError", "Internal server error.")
+
+			return
+		}
+
+		await this.server.sdk.fs()._removeItem({ path })
+		await this.server.sdk.fs()._addItem({
+			path,
+			item: {
+				type: "file",
+				uuid: item.uuid,
+				metadata: {
+					name,
+					size: item.size,
+					lastModified: item.lastModified,
+					creation: item.creation,
+					hash: item.hash,
+					key: item.key,
+					bucket: item.bucket,
+					region: item.region,
+					version: item.version,
+					chunks: item.chunks,
+					mime: item.mime
+				}
+			}
+		})
+
+		res.set("ETag", item.uuid)
+
+		await Responses.ok(res)
 	}
 }
 

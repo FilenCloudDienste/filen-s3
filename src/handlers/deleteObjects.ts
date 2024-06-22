@@ -40,37 +40,23 @@ export class DeleteObjects {
 						const normalizedKey = normalizeKey(object.Key)
 
 						this.server
-							.getRWMutex(normalizedKey)
-							.acquire()
-							.then(() => {
-								this.server
-									.getObject(normalizedKey)
-									.then(obj => {
-										if (!obj.exists) {
-											deleted.push({ Key: object.Key })
+							.getObject(normalizedKey)
+							.then(obj => {
+								if (!obj.exists) {
+									deleted.push({ Key: object.Key })
 
-											resolve()
+									resolve()
 
-											return
-										}
+									return
+								}
 
-										this.server.sdk
-											.fs()
-											.unlink({ path: normalizedKey })
-											.then(() => {
-												deleted.push({ Key: object.Key })
+								this.server.sdk
+									.fs()
+									.unlink({ path: normalizedKey })
+									.then(() => {
+										deleted.push({ Key: object.Key })
 
-												resolve()
-											})
-											.catch(() => {
-												errors.push({
-													Key: object.Key,
-													Code: "InternalError",
-													Message: "Internal server error."
-												})
-
-												resolve()
-											})
+										resolve()
 									})
 									.catch(() => {
 										errors.push({
@@ -80,9 +66,6 @@ export class DeleteObjects {
 										})
 
 										resolve()
-									})
-									.finally(() => {
-										this.server.getRWMutex(normalizedKey).release()
 									})
 							})
 							.catch(() => {

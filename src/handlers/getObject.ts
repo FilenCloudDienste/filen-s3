@@ -26,67 +26,61 @@ export class GetObject {
 
 		const key = extractKeyFromRequestParams(req)
 
-		await this.server.getRWMutex(key).acquire()
+		const object = await this.server.getObject(key)
 
-		try {
-			const object = await this.server.getObject(key)
+		if (!object.exists || object.stats.type === "directory") {
+			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 
-			if (!object.exists || object.stats.type === "directory") {
-				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+			return
+		}
+
+		const mimeType = mimeTypes.lookup(object.stats.name) || "application/octet-stream"
+		const totalLength = object.stats.size
+		const range = req.headers.range || req.headers["content-range"]
+		let start = 0
+		let end = totalLength - 1
+
+		if (range) {
+			const parsedRange = parseByteRange(range, totalLength)
+
+			if (!parsedRange) {
+				await Responses.badRequest(res)
 
 				return
 			}
 
-			const mimeType = mimeTypes.lookup(object.stats.name) || "application/octet-stream"
-			const totalLength = object.stats.size
-			const range = req.headers.range || req.headers["content-range"]
-			let start = 0
-			let end = totalLength - 1
+			start = parsedRange.start
+			end = parsedRange.end
 
-			if (range) {
-				const parsedRange = parseByteRange(range, totalLength)
-
-				if (!parsedRange) {
-					await Responses.badRequest(res)
-
-					return
-				}
-
-				start = parsedRange.start
-				end = parsedRange.end
-
-				res.status(206)
-				res.set("Content-Range", `bytes ${start}-${end}/${totalLength}`)
-				res.set("Content-Length", (end - start + 1).toString())
-			} else {
-				res.status(200)
-				res.set("Content-Length", object.stats.size.toString())
-			}
-
-			res.set("Content-Disposition", `attachment; filename="${object.stats.name}"`)
-			res.set("Content-Type", mimeType)
-			res.set("Accept-Ranges", "bytes")
-
-			const stream = await this.server.sdk.cloud().downloadFileToReadableStream({
-				uuid: object.stats.uuid,
-				bucket: object.stats.bucket,
-				region: object.stats.region,
-				version: object.stats.version,
-				key: object.stats.key,
-				size: object.stats.size,
-				chunks: object.stats.chunks,
-				start,
-				end
-			})
-
-			const nodeStream = Readable.fromWeb(stream as unknown as ReadableStreamWebType<Buffer>)
-
-			nodeStream.once("error", next)
-
-			nodeStream.pipe(res)
-		} finally {
-			this.server.getRWMutex(key).release()
+			res.status(206)
+			res.set("Content-Range", `bytes ${start}-${end}/${totalLength}`)
+			res.set("Content-Length", (end - start + 1).toString())
+		} else {
+			res.status(200)
+			res.set("Content-Length", object.stats.size.toString())
 		}
+
+		res.set("Content-Disposition", `attachment; filename="${object.stats.name}"`)
+		res.set("Content-Type", mimeType)
+		res.set("Accept-Ranges", "bytes")
+
+		const stream = await this.server.sdk.cloud().downloadFileToReadableStream({
+			uuid: object.stats.uuid,
+			bucket: object.stats.bucket,
+			region: object.stats.region,
+			version: object.stats.version,
+			key: object.stats.key,
+			size: object.stats.size,
+			chunks: object.stats.chunks,
+			start,
+			end
+		})
+
+		const nodeStream = Readable.fromWeb(stream as unknown as ReadableStreamWebType<Buffer>)
+
+		nodeStream.once("error", next)
+
+		nodeStream.pipe(res)
 	}
 }
 

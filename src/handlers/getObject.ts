@@ -80,7 +80,7 @@ export class GetObject {
 
 		const cleanup = () => {
 			try {
-				if (!nodeStream.closed || !nodeStream.destroyed) {
+				if (!nodeStream.closed && !nodeStream.destroyed) {
 					nodeStream.destroy()
 				}
 			} catch {
@@ -110,6 +110,7 @@ export class GetObject {
 
 		nodeStream.once("error", err => {
 			cleanup()
+
 			next(err)
 		})
 

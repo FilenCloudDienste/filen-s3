@@ -112,8 +112,6 @@ export class Auth {
 				next()
 			}
 		} catch (e) {
-			console.error(e)
-
 			await Responses.error(res, 400, "BadRequest", "Invalid auth.")
 		}
 	}

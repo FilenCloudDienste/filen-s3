@@ -17,6 +17,7 @@ import HeadBucket from "./handlers/headBucket"
 import DeleteObjects from "./handlers/deleteObjects"
 import Responses from "./responses"
 import { Semaphore, ISemaphore } from "./semaphore"
+import http, { type IncomingMessage, type ServerResponse } from "http"
 
 export type ServerConfig = {
 	hostname: string
@@ -39,6 +40,10 @@ export class S3Server {
 	public readonly service = "s3"
 	public readonly bucketName = "filen"
 	private readonly rwMutex: Record<string, ISemaphore> = {}
+	public serverInstance:
+		| https.Server<typeof IncomingMessage, typeof ServerResponse>
+		| http.Server<typeof IncomingMessage, typeof ServerResponse>
+		| null = null
 
 	public constructor({
 		hostname = "127.0.0.1",
@@ -113,7 +118,7 @@ export class S3Server {
 			if (this.serverConfig.https) {
 				Certs.get()
 					.then(certs => {
-						https
+						this.serverInstance = https
 							.createServer(
 								{
 									cert: certs.cert,
@@ -127,10 +132,37 @@ export class S3Server {
 					})
 					.catch(reject)
 			} else {
-				this.server.listen(this.serverConfig.port, this.serverConfig.hostname, () => {
+				this.serverInstance = http.createServer(this.server).listen(this.serverConfig.port, this.serverConfig.hostname, () => {
 					resolve()
 				})
 			}
+		})
+	}
+
+	/**
+	 * Stop the server.
+	 *
+	 * @public
+	 * @async
+	 * @returns {Promise<void>}
+	 */
+	public async stop(): Promise<void> {
+		await new Promise<void>((resolve, reject) => {
+			if (!this.serverInstance) {
+				resolve()
+
+				return
+			}
+
+			this.serverInstance.close(err => {
+				if (err) {
+					reject(err)
+
+					return
+				}
+
+				resolve()
+			})
 		})
 	}
 }

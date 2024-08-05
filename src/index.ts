@@ -55,7 +55,8 @@ export class S3Server {
 		port?: number
 		https?: boolean
 		user: {
-			sdkConfig: FilenSDKConfig
+			sdkConfig?: FilenSDKConfig
+			sdk?: FilenSDK
 			accessKeyId: string
 			secretKeyId: string
 		}
@@ -65,8 +66,31 @@ export class S3Server {
 			port,
 			https
 		}
-		this.user = user
-		this.sdk = new FilenSDK(user.sdkConfig)
+
+		if (!user.sdk && !user.sdkConfig) {
+			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
+		}
+
+		if (user.sdk) {
+			this.user = {
+				...user,
+				sdkConfig: user.sdk.config
+			}
+			this.sdk = user.sdk
+		} else if (user.sdkConfig) {
+			this.user = {
+				...user,
+				sdkConfig: user.sdkConfig
+			}
+			this.sdk = new FilenSDK({
+				...user.sdkConfig,
+				connectToSocket: true,
+				metadataCache: true
+			})
+		} else {
+			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
+		}
+
 		this.server = express()
 	}
 

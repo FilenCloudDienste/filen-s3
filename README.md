@@ -26,13 +26,28 @@ npm install @filen/s3@latest
 2. Initialize the server and query it using aws-sdk
 
 ```typescript
+import FilenSDK from "@filen/sdk"
+import path from "path"
+import os from "os"
 import S3Server from "@filen/s3"
 import { S3 } from "aws-sdk"
+
+// Initialize a SDK instance (optional)
+const filen = new FilenSDK({
+	metadataCache: true,
+	connectToSocket: true,
+	tmpPath: path.join(os.tmpdir(), "filen-sdk")
+})
+
+await filen.login({
+	email: "your@email.com",
+	password: "supersecret123",
+	twoFactorCode: "123456"
+})
 
 const hostname = "127.0.0.1"
 const port = 1700
 const https = false
-const sdkConfig = {} // FilenSDK config object
 const endpoint = `${https ? "https" : "http"}://${hostname === "127.0.0.1" ? "local.s3.filen.io" : hostname}:${port}`
 
 const server = new S3Server({
@@ -42,7 +57,7 @@ const server = new S3Server({
 	user: {
 		accessKeyId: "admin",
 		secretKeyId: "admin",
-		sdkConfig
+		sdkConfig: filen.config
 	}
 })
 

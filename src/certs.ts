@@ -61,9 +61,9 @@ export class Certs {
 		)
 
 		await Promise.all([
-			writeFileAtomic(this.certPath, generated.cert),
-			writeFileAtomic(this.privateKeyPath, generated.private),
-			writeFileAtomic(this.expiryPath, (now + 86400 * 360).toString())
+			writeFileAtomic(this.certPath, generated.cert, "utf-8"),
+			writeFileAtomic(this.privateKeyPath, generated.private, "utf-8"),
+			writeFileAtomic(this.expiryPath, (now + 86400 * 360).toString(), "utf-8")
 		])
 
 		return {

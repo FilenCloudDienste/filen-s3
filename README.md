@@ -57,7 +57,7 @@ const server = new S3Server({
 	user: {
 		accessKeyId: "admin",
 		secretKeyId: "admin",
-		sdkConfig: filen.config
+		sdk: filen
 	}
 })
 

@@ -52,7 +52,10 @@ export class DeleteObjects {
 
 								this.server.sdk
 									.fs()
-									.unlink({ path: normalizedKey })
+									.unlink({
+										path: normalizedKey,
+										permanent: false
+									})
 									.then(() => {
 										deleted.push({ Key: object.Key })
 

@@ -33,7 +33,7 @@ export class DeleteObject {
 
 		await this.server.sdk.fs().unlink({
 			path: `/${key}`,
-			permanent: true
+			permanent: false
 		})
 
 		await Responses.noContent(res)

@@ -1,6 +1,6 @@
 {
 	"name": "@filen/s3",
-	"version": "0.2.25",
+	"version": "0.2.26",
 	"description": "Filen S3",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
@@ -52,7 +52,7 @@
 		"typescript": "^5.3.3"
 	},
 	"dependencies": {
-		"@filen/sdk": "^0.1.154",
+		"@filen/sdk": "^0.1.161",
 		"aws-sdk": "^2.1636.0",
 		"body-parser": "^1.20.2",
 		"dayjs": "^1.11.11",

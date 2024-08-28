@@ -9,34 +9,38 @@ export class DeleteObject {
 	}
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
-		if (req.url.includes("?")) {
-			next()
+		try {
+			if (req.url.includes("?")) {
+				next()
 
-			return
+				return
+			}
+
+			if (typeof req.params.key !== "string" || req.params.key.length === 0) {
+				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+
+				return
+			}
+
+			const key = extractKeyFromRequestParams(req)
+
+			const object = await this.server.getObject(key)
+
+			if (!object.exists) {
+				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+
+				return
+			}
+
+			await this.server.sdk.fs().unlink({
+				path: `/${key}`,
+				permanent: false
+			})
+
+			await Responses.noContent(res)
+		} catch {
+			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
-
-		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
-			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
-
-			return
-		}
-
-		const key = extractKeyFromRequestParams(req)
-
-		const object = await this.server.getObject(key)
-
-		if (!object.exists) {
-			await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
-
-			return
-		}
-
-		await this.server.sdk.fs().unlink({
-			path: `/${key}`,
-			permanent: false
-		})
-
-		await Responses.noContent(res)
 	}
 }
 

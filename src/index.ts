@@ -4,7 +4,6 @@ import https from "https"
 import Certs from "./certs"
 import Errors from "./middlewares/errors"
 import Auth from "./middlewares/auth"
-import asyncHandler from "express-async-handler"
 import ListBuckets from "./handlers/listBuckets"
 import ListObjects from "./handlers/listObjects"
 import GetObject from "./handlers/getObject"
@@ -117,20 +116,27 @@ export class S3Server {
 		}
 	}
 
+	/**
+	 * Start the server.
+	 *
+	 * @public
+	 * @async
+	 * @returns {Promise<void>}
+	 */
 	public async start(): Promise<void> {
 		this.server.disable("x-powered-by")
 
 		this.server.use(body)
-		this.server.use(asyncHandler(new Auth(this).handle))
+		this.server.use(new Auth(this).handle)
 
-		this.server.get("/", asyncHandler(new ListBuckets(this).handle))
-		this.server.get(`/${this.bucketName}`, asyncHandler(new ListObjects(this).handle))
-		this.server.head(`/${this.bucketName}`, asyncHandler(new HeadBucket(this).handle))
-		this.server.post(`/${this.bucketName}`, asyncHandler(new DeleteObjects(this).handle))
-		this.server.get(`/${this.bucketName}/:key*`, asyncHandler(new GetObject(this).handle))
-		this.server.head(`/${this.bucketName}/:key*`, asyncHandler(new HeadObject(this).handle))
-		this.server.delete(`/${this.bucketName}/:key*`, asyncHandler(new DeleteObject(this).handle))
-		this.server.put(`/${this.bucketName}/:key*`, asyncHandler(new PutObject(this).handle))
+		this.server.get("/", new ListBuckets(this).handle)
+		this.server.get(`/${this.bucketName}`, new ListObjects(this).handle)
+		this.server.head(`/${this.bucketName}`, new HeadBucket(this).handle)
+		this.server.post(`/${this.bucketName}`, new DeleteObjects(this).handle)
+		this.server.get(`/${this.bucketName}/:key*`, new GetObject(this).handle)
+		this.server.head(`/${this.bucketName}/:key*`, new HeadObject(this).handle)
+		this.server.delete(`/${this.bucketName}/:key*`, new DeleteObject(this).handle)
+		this.server.put(`/${this.bucketName}/:key*`, new PutObject(this).handle)
 
 		this.server.use((_: Request, res: Response) => {
 			Responses.error(res, 501, "NotImplemented", "The requested method is not implemented.").catch(() => {})

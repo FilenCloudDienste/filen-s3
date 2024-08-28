@@ -8,21 +8,25 @@ export class HeadBucket {
 	}
 
 	public async handle(req: Request, res: Response): Promise<void> {
-		if (req.url !== `/${this.server.bucketName}`) {
-			await Responses.error(res, 404, "NoSuchBucket", "Bucket not found")
+		try {
+			if (req.url !== `/${this.server.bucketName}`) {
+				await Responses.error(res, 404, "NoSuchBucket", "Bucket not found")
 
-			return
-		}
+				return
+			}
 
-		res.set("x-amz-bucket-region", this.server.region)
-		res.set("Content-Length", "0")
-		res.status(200)
+			res.set("x-amz-bucket-region", this.server.region)
+			res.set("Content-Length", "0")
+			res.status(200)
 
-		await new Promise<void>(resolve => {
-			res.end(() => {
-				resolve()
+			await new Promise<void>(resolve => {
+				res.end(() => {
+					resolve()
+				})
 			})
-		})
+		} catch {
+			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
+		}
 	}
 }
 

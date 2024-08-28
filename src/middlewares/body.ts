@@ -30,7 +30,5 @@ export default function body(req: Request, res: Response, next: NextFunction): v
 
 	req.on("error", err => {
 		passThrough.emit("error", err)
-
-		next(err)
 	})
 }

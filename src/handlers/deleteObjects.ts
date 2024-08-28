@@ -15,76 +15,80 @@ export class DeleteObjects {
 	}
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
-		if (!req.url.includes("?delete") || !req.bodyStream) {
-			next()
+		try {
+			if (!req.url.includes("?delete") || !req.bodyStream) {
+				next()
 
-			return
-		}
+				return
+			}
 
-		const xml = await streamToXML<DeleteObjectsXML>(req.bodyStream)
+			const xml = await streamToXML<DeleteObjectsXML>(req.bodyStream)
 
-		if (!xml || !xml.Delete || !xml.Delete.Object) {
-			await Responses.error(res, 400, "BadRequest", "Invalid delete XML.")
+			if (!xml || !xml.Delete || !xml.Delete.Object) {
+				await Responses.error(res, 400, "BadRequest", "Invalid delete XML.")
 
-			return
-		}
+				return
+			}
 
-		const objects = xml.Delete.Object
-		const deleted: { Key: string }[] = []
-		const errors: { Key: string; Code: string; Message: string }[] = []
+			const objects = xml.Delete.Object
+			const deleted: { Key: string }[] = []
+			const errors: { Key: string; Code: string; Message: string }[] = []
 
-		await promiseAllSettledChunked(
-			objects.map(
-				object =>
-					new Promise<void>(resolve => {
-						const normalizedKey = normalizeKey(object.Key)
+			await promiseAllSettledChunked(
+				objects.map(
+					object =>
+						new Promise<void>(resolve => {
+							const normalizedKey = normalizeKey(object.Key)
 
-						this.server
-							.getObject(normalizedKey)
-							.then(obj => {
-								if (!obj.exists) {
-									deleted.push({ Key: object.Key })
-
-									resolve()
-
-									return
-								}
-
-								this.server.sdk
-									.fs()
-									.unlink({
-										path: normalizedKey,
-										permanent: false
-									})
-									.then(() => {
+							this.server
+								.getObject(normalizedKey)
+								.then(obj => {
+									if (!obj.exists) {
 										deleted.push({ Key: object.Key })
 
 										resolve()
-									})
-									.catch(() => {
-										errors.push({
-											Key: object.Key,
-											Code: "InternalError",
-											Message: "Internal server error."
+
+										return
+									}
+
+									this.server.sdk
+										.fs()
+										.unlink({
+											path: normalizedKey,
+											permanent: false
 										})
+										.then(() => {
+											deleted.push({ Key: object.Key })
 
-										resolve()
-									})
-							})
-							.catch(() => {
-								errors.push({
-									Key: object.Key,
-									Code: "InternalError",
-									Message: "Internal server error."
+											resolve()
+										})
+										.catch(() => {
+											errors.push({
+												Key: object.Key,
+												Code: "InternalError",
+												Message: "Internal server error."
+											})
+
+											resolve()
+										})
 								})
+								.catch(() => {
+									errors.push({
+										Key: object.Key,
+										Code: "InternalError",
+										Message: "Internal server error."
+									})
 
-								resolve()
-							})
-					})
+									resolve()
+								})
+						})
+				)
 			)
-		)
 
-		await Responses.deleteObjects(res, deleted, errors)
+			await Responses.deleteObjects(res, deleted, errors)
+		} catch {
+			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
+		}
 	}
 }
 

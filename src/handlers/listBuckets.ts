@@ -8,19 +8,23 @@ export class ListBuckets {
 	}
 
 	public async handle(_: Request, res: Response): Promise<void> {
-		await Responses.listBuckets(
-			res,
-			[
+		try {
+			await Responses.listBuckets(
+				res,
+				[
+					{
+						name: this.server.bucketName,
+						creationDate: Date.now()
+					}
+				],
 				{
-					name: this.server.bucketName,
-					creationDate: Date.now()
+					id: this.server.user.accessKeyId,
+					displayName: this.server.user.accessKeyId
 				}
-			],
-			{
-				id: this.server.user.accessKeyId,
-				displayName: this.server.user.accessKeyId
-			}
-		)
+			)
+		} catch {
+			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
+		}
 	}
 }
 

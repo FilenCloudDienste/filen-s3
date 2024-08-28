@@ -91,107 +91,111 @@ export class PutObject {
 	}
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
-		if (req.url.includes("?")) {
-			next()
+		try {
+			if (req.url.includes("?")) {
+				next()
 
-			return
-		}
-
-		if (typeof req.params.key !== "string" || req.params.key.length === 0) {
-			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
-
-			return
-		}
-
-		const isCopy = typeof req.headers["x-amz-copy-source"] === "string" && req.headers["x-amz-copy-source"].length > 0
-
-		if (isCopy) {
-			await this.copy(req, res)
-
-			return
-		}
-
-		if (req.url.trim().endsWith("/") && req.bodySize === 0) {
-			await this.mkdir(req, res)
-
-			return
-		}
-
-		if (!req.bodyStream || !req.bodySize || req.bodySize === 0) {
-			await Responses.error(res, 400, "BadRequest", "Invalid body stream.")
-
-			return
-		}
-
-		const key = extractKeyFromRequestParams(req)
-		const path = normalizeKey(key)
-		const parentPath = pathModule.posix.dirname(path)
-		const name = pathModule.posix.basename(path)
-		const thisObject = await this.server.getObject(key)
-
-		if (thisObject.exists && thisObject.stats.type === "directory") {
-			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
-
-			return
-		}
-
-		await this.server.sdk.fs().mkdir({ path: parentPath })
-
-		const parentObject = await this.server.getObject(parentPath)
-
-		if (!parentObject.exists || parentObject.stats.type !== "directory") {
-			await Responses.error(res, 412, "PreconditionFailed", "Parent directory does not exist.")
-
-			return
-		}
-
-		let didError = false
-		const item = await this.server.sdk.cloud().uploadLocalFileStream({
-			source: req.bodyStream,
-			parent: parentObject.stats.uuid,
-			name,
-			onError: err => {
-				didError = true
-
-				next(err)
+				return
 			}
-		})
 
-		if (didError) {
-			return
-		}
+			if (typeof req.params.key !== "string" || req.params.key.length === 0) {
+				await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
 
-		if (item.type !== "file") {
-			await Responses.error(res, 500, "InternalError", "Internal server error.")
+				return
+			}
 
-			return
-		}
+			const isCopy = typeof req.headers["x-amz-copy-source"] === "string" && req.headers["x-amz-copy-source"].length > 0
 
-		await this.server.sdk.fs()._removeItem({ path })
-		await this.server.sdk.fs()._addItem({
-			path,
-			item: {
-				type: "file",
-				uuid: item.uuid,
-				metadata: {
-					name,
-					size: item.size,
-					lastModified: item.lastModified,
-					creation: item.creation,
-					hash: item.hash,
-					key: item.key,
-					bucket: item.bucket,
-					region: item.region,
-					version: item.version,
-					chunks: item.chunks,
-					mime: item.mime
+			if (isCopy) {
+				await this.copy(req, res)
+
+				return
+			}
+
+			if (req.url.trim().endsWith("/") && req.bodySize === 0) {
+				await this.mkdir(req, res)
+
+				return
+			}
+
+			if (!req.bodyStream || !req.bodySize || req.bodySize === 0) {
+				await Responses.error(res, 400, "BadRequest", "Invalid body stream.")
+
+				return
+			}
+
+			const key = extractKeyFromRequestParams(req)
+			const path = normalizeKey(key)
+			const parentPath = pathModule.posix.dirname(path)
+			const name = pathModule.posix.basename(path)
+			const thisObject = await this.server.getObject(key)
+
+			if (thisObject.exists && thisObject.stats.type === "directory") {
+				await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
+
+				return
+			}
+
+			await this.server.sdk.fs().mkdir({ path: parentPath })
+
+			const parentObject = await this.server.getObject(parentPath)
+
+			if (!parentObject.exists || parentObject.stats.type !== "directory") {
+				await Responses.error(res, 412, "PreconditionFailed", "Parent directory does not exist.")
+
+				return
+			}
+
+			let didError = false
+			const item = await this.server.sdk.cloud().uploadLocalFileStream({
+				source: req.bodyStream,
+				parent: parentObject.stats.uuid,
+				name,
+				onError: () => {
+					didError = true
+
+					Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 				}
+			})
+
+			if (didError) {
+				return
 			}
-		})
 
-		res.set("ETag", item.uuid)
+			if (item.type !== "file") {
+				await Responses.error(res, 500, "InternalError", "Internal server error.")
 
-		await Responses.ok(res)
+				return
+			}
+
+			await this.server.sdk.fs()._removeItem({ path })
+			await this.server.sdk.fs()._addItem({
+				path,
+				item: {
+					type: "file",
+					uuid: item.uuid,
+					metadata: {
+						name,
+						size: item.size,
+						lastModified: item.lastModified,
+						creation: item.creation,
+						hash: item.hash,
+						key: item.key,
+						bucket: item.bucket,
+						region: item.region,
+						version: item.version,
+						chunks: item.chunks,
+						mime: item.mime
+					}
+				}
+			})
+
+			res.set("ETag", item.uuid)
+
+			await Responses.ok(res)
+		} catch {
+			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
+		}
 	}
 }
 

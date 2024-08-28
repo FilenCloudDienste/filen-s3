@@ -87,7 +87,7 @@ export class Auth {
 		}
 	}
 
-	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
+	public handle(req: Request, res: Response, next: NextFunction): void {
 		try {
 			const authDetails = this.getAuthDetails(req)
 			const xAmzDate = req.headers["x-amz-date"] as string
@@ -107,12 +107,12 @@ export class Auth {
 			)
 
 			if (authDetails.accessKeyId !== this.server.user.accessKeyId || authDetails.signature !== signature) {
-				await Responses.error(res, 403, "Forbidden", "Invalid credentials.")
+				Responses.error(res, 403, "Forbidden", "Invalid credentials.").catch(() => {})
 			} else {
 				next()
 			}
-		} catch (e) {
-			await Responses.error(res, 400, "BadRequest", "Invalid auth.")
+		} catch {
+			Responses.error(res, 400, "BadRequest", "Invalid auth.").catch(() => {})
 		}
 	}
 }

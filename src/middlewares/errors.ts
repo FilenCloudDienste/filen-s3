@@ -1,15 +1,15 @@
-import { type ErrorRequestHandler } from "express"
+import { type ErrorRequestHandler, type Response, type Request } from "express"
 import Responses from "../responses"
 
 /**
  * Error handling middleware.
  *
- * @param {*} err
- * @param {*} req
- * @param {*} res
+ * @param {Error} err
+ * @param {Request} req
+ * @param {Response} res
  * @returns {void}
  */
-export const Errors: ErrorRequestHandler = (err, req, res): void => {
+export const Errors: ErrorRequestHandler = (err: Error, req: Request, res: Response): void => {
 	if (!err) {
 		return
 	}

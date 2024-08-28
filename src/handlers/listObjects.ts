@@ -48,75 +48,79 @@ export class ListObjectsV2 {
 	}
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
-		if (!req.url.includes("prefix=")) {
-			next()
+		try {
+			if (!req.url.includes("prefix=")) {
+				next()
 
-			return
-		}
-
-		const params = this.parseQueryParams(req)
-		const normalizedPrefix = this.normalizePrefix(params.prefix)
-		const dirnameObject = await this.server.getObject(normalizedPrefix)
-		const dirname =
-			normalizedPrefix === "/"
-				? "/"
-				: dirnameObject.exists && dirnameObject.stats.type === "directory"
-				? normalizedPrefix
-				: pathModule.dirname(normalizedPrefix)
-		const topLevelItems: string[] = []
-
-		const { exists: dirnameExists } = await this.server.getObject(dirname)
-
-		if (!dirnameExists) {
-			await Responses.listObjectsV2(res, params.prefix, [], [])
-
-			return
-		}
-
-		const topLevelReaddir = await this.server.sdk.fs().readdir({ path: dirname })
-
-		for (const item of topLevelReaddir) {
-			const itemPath = pathModule.posix.join(dirname, item)
-
-			if (!itemPath.startsWith(normalizedPrefix)) {
-				continue
+				return
 			}
 
-			topLevelItems.push(item)
-		}
+			const params = this.parseQueryParams(req)
+			const normalizedPrefix = this.normalizePrefix(params.prefix)
+			const dirnameObject = await this.server.getObject(normalizedPrefix)
+			const dirname =
+				normalizedPrefix === "/"
+					? "/"
+					: dirnameObject.exists && dirnameObject.stats.type === "directory"
+					? normalizedPrefix
+					: pathModule.dirname(normalizedPrefix)
+			const topLevelItems: string[] = []
 
-		const objects: FSStatsObject[] = (
-			await promiseAllChunked(
-				topLevelItems.map(
-					item =>
-						new Promise<FSStatsObject>((resolve, reject) => {
-							this.server.sdk
-								.fs()
-								.stat({ path: pathModule.posix.join(dirname, item) })
-								.then(stats => {
-									resolve({
-										...stats,
-										path: pathModule.posix.join(dirname, item)
+			const { exists: dirnameExists } = await this.server.getObject(dirname)
+
+			if (!dirnameExists) {
+				await Responses.listObjectsV2(res, params.prefix, [], [])
+
+				return
+			}
+
+			const topLevelReaddir = await this.server.sdk.fs().readdir({ path: dirname })
+
+			for (const item of topLevelReaddir) {
+				const itemPath = pathModule.posix.join(dirname, item)
+
+				if (!itemPath.startsWith(normalizedPrefix)) {
+					continue
+				}
+
+				topLevelItems.push(item)
+			}
+
+			const objects: FSStatsObject[] = (
+				await promiseAllChunked(
+					topLevelItems.map(
+						item =>
+							new Promise<FSStatsObject>((resolve, reject) => {
+								this.server.sdk
+									.fs()
+									.stat({ path: pathModule.posix.join(dirname, item) })
+									.then(stats => {
+										resolve({
+											...stats,
+											path: pathModule.posix.join(dirname, item)
+										})
 									})
-								})
-								.catch(reject)
-						})
+									.catch(reject)
+							})
+					)
 				)
-			)
-		).sort((a, b) => a.path.length - b.path.length)
+			).sort((a, b) => a.path.length - b.path.length)
 
-		const commonPrefixes: string[] = []
-		const finalObjects: FSStatsObject[] = []
+			const commonPrefixes: string[] = []
+			const finalObjects: FSStatsObject[] = []
 
-		for (const object of objects) {
-			if (object.type === "directory") {
-				commonPrefixes.push(`${object.path.slice(1)}/`)
-			} else {
-				finalObjects.push(object)
+			for (const object of objects) {
+				if (object.type === "directory") {
+					commonPrefixes.push(`${object.path.slice(1)}/`)
+				} else {
+					finalObjects.push(object)
+				}
 			}
-		}
 
-		await Responses.listObjectsV2(res, params.prefix, finalObjects, commonPrefixes)
+			await Responses.listObjectsV2(res, params.prefix, finalObjects, commonPrefixes)
+		} catch {
+			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
+		}
 	}
 }
 

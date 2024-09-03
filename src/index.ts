@@ -17,6 +17,9 @@ import DeleteObjects from "./handlers/deleteObjects"
 import Responses from "./responses"
 import { Semaphore, ISemaphore } from "./semaphore"
 import http, { type IncomingMessage, type ServerResponse } from "http"
+import { type Socket } from "net"
+import { v4 as uuidv4 } from "uuid"
+import { type Duplex } from "stream"
 
 export type ServerConfig = {
 	hostname: string
@@ -43,6 +46,7 @@ export class S3Server {
 		| https.Server<typeof IncomingMessage, typeof ServerResponse>
 		| http.Server<typeof IncomingMessage, typeof ServerResponse>
 		| null = null
+	public connections: Record<string, Socket | Duplex> = {}
 
 	public constructor({
 		hostname = "127.0.0.1",
@@ -124,6 +128,8 @@ export class S3Server {
 	 * @returns {Promise<void>}
 	 */
 	public async start(): Promise<void> {
+		this.connections = {}
+
 		this.server.disable("x-powered-by")
 
 		this.server.use(body)
@@ -159,12 +165,32 @@ export class S3Server {
 							.listen(this.serverConfig.port, this.serverConfig.hostname, () => {
 								resolve()
 							})
+							.on("connection", socket => {
+								const socketId = uuidv4()
+
+								this.connections[socketId] = socket
+
+								socket.once("close", () => {
+									delete this.connections[socketId]
+								})
+							})
 					})
 					.catch(reject)
 			} else {
-				this.serverInstance = http.createServer(this.server).listen(this.serverConfig.port, this.serverConfig.hostname, () => {
-					resolve()
-				})
+				this.serverInstance = http
+					.createServer(this.server)
+					.listen(this.serverConfig.port, this.serverConfig.hostname, () => {
+						resolve()
+					})
+					.on("connection", socket => {
+						const socketId = uuidv4()
+
+						this.connections[socketId] = socket
+
+						socket.once("close", () => {
+							delete this.connections[socketId]
+						})
+					})
 			}
 		})
 	}
@@ -174,9 +200,10 @@ export class S3Server {
 	 *
 	 * @public
 	 * @async
+	 * @param {boolean} [terminate=false]
 	 * @returns {Promise<void>}
 	 */
-	public async stop(): Promise<void> {
+	public async stop(terminate: boolean = false): Promise<void> {
 		await new Promise<void>((resolve, reject) => {
 			if (!this.serverInstance) {
 				resolve()
@@ -193,6 +220,18 @@ export class S3Server {
 
 				resolve()
 			})
+
+			if (terminate) {
+				for (const socketId in this.connections) {
+					try {
+						this.connections[socketId]?.destroy()
+
+						delete this.connections[socketId]
+					} catch {
+						// Noop
+					}
+				}
+			}
 		})
 	}
 }

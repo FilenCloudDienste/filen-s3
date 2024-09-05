@@ -19,6 +19,10 @@ export class Responses {
 			displayName: string
 		}
 	): Promise<void> {
+		if (res.headersSent) {
+			return
+		}
+
 		const response = this.xmlBuilder.buildObject({
 			ListAllMyBucketsResult: {
 				Buckets: buckets.map(bucket => ({
@@ -46,6 +50,10 @@ export class Responses {
 	}
 
 	public static async error(res: Response, status: number, code: string, message: string): Promise<void> {
+		if (res.headersSent) {
+			return
+		}
+
 		const response = this.xmlBuilder.buildObject({
 			Error: {
 				Code: code,
@@ -65,6 +73,10 @@ export class Responses {
 	}
 
 	public static async listObjectsV2(res: Response, prefix: string, objects: FSStatsObject[], commonPrefixes: string[]): Promise<void> {
+		if (res.headersSent) {
+			return
+		}
+
 		const response = this.xmlBuilder.buildObject({
 			ListBucketResult: {
 				IsTruncated: false,
@@ -97,6 +109,10 @@ export class Responses {
 	}
 
 	public static async copyObject(res: Response, result: { eTag: string; lastModified: number }): Promise<void> {
+		if (res.headersSent) {
+			return
+		}
+
 		const response = this.xmlBuilder.buildObject({
 			CopyObjectResult: {
 				ETag: result.eTag,
@@ -120,6 +136,10 @@ export class Responses {
 		deleted: { Key: string }[],
 		errors: { Key: string; Code: string; Message: string }[]
 	): Promise<void> {
+		if (res.headersSent) {
+			return
+		}
+
 		const response = this.xmlBuilder.buildObject({
 			DeleteResult: {
 				Deleted: deleted.map(del => ({
@@ -145,6 +165,10 @@ export class Responses {
 	}
 
 	public static async ok(res: Response): Promise<void> {
+		if (res.headersSent) {
+			return
+		}
+
 		res.set("Content-Length", "0")
 		res.status(200)
 
@@ -156,6 +180,10 @@ export class Responses {
 	}
 
 	public static async noContent(res: Response): Promise<void> {
+		if (res.headersSent) {
+			return
+		}
+
 		res.set("Content-Length", "0")
 		res.status(204)
 
@@ -167,6 +195,10 @@ export class Responses {
 	}
 
 	public static async badRequest(res: Response): Promise<void> {
+		if (res.headersSent) {
+			return
+		}
+
 		res.set("Content-Length", "0")
 		res.status(400)
 

@@ -1,6 +1,7 @@
 import { type Request, type Response, type NextFunction } from "express"
 import crypto from "crypto"
 import { PassThrough } from "stream"
+import Responses from "../responses"
 
 export default function body(req: Request, res: Response, next: NextFunction): void {
 	const hash = crypto.createHash("sha256")
@@ -9,13 +10,19 @@ export default function body(req: Request, res: Response, next: NextFunction): v
 
 	req.bodyStream = passThrough
 
-	req.on("data", chunk => {
-		if (chunk instanceof Buffer) {
-			size += chunk.byteLength
+	req.on("data", async chunk => {
+		try {
+			if (chunk instanceof Buffer) {
+				size += chunk.byteLength
 
-			hash.update(chunk)
+				hash.update(chunk)
 
-			passThrough.write(chunk)
+				if (!passThrough.write(chunk)) {
+					await new Promise<void>(resolve => passThrough.once("drain", resolve))
+				}
+			}
+		} catch {
+			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
 	})
 

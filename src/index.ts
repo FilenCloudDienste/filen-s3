@@ -20,6 +20,7 @@ import http, { type IncomingMessage, type ServerResponse } from "http"
 import { type Socket } from "net"
 import { v4 as uuidv4 } from "uuid"
 import { type Duplex } from "stream"
+import { rateLimit } from "express-rate-limit"
 
 export type ServerConfig = {
 	hostname: string
@@ -31,6 +32,11 @@ export type User = {
 	sdkConfig: FilenSDKConfig
 	accessKeyId: string
 	secretKeyId: string
+}
+
+export type RateLimit = {
+	windowMs: number
+	limit: number
 }
 
 export class S3Server {
@@ -47,12 +53,17 @@ export class S3Server {
 		| http.Server<typeof IncomingMessage, typeof ServerResponse>
 		| null = null
 	public connections: Record<string, Socket | Duplex> = {}
+	public rateLimit: RateLimit
 
 	public constructor({
 		hostname = "127.0.0.1",
 		port = 1700,
 		user,
-		https = false
+		https = false,
+		rateLimit = {
+			windowMs: 1000,
+			limit: 1000
+		}
 	}: {
 		hostname?: string
 		port?: number
@@ -63,12 +74,15 @@ export class S3Server {
 			accessKeyId: string
 			secretKeyId: string
 		}
+		rateLimit?: RateLimit
 	}) {
 		this.serverConfig = {
 			hostname,
 			port,
 			https
 		}
+
+		this.rateLimit = rateLimit
 
 		if (!user.sdk && !user.sdkConfig) {
 			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
@@ -131,6 +145,44 @@ export class S3Server {
 		this.connections = {}
 
 		this.server.disable("x-powered-by")
+
+		this.server.use(
+			rateLimit({
+				windowMs: this.rateLimit.windowMs,
+				limit: this.rateLimit.limit,
+				standardHeaders: "draft-7",
+				legacyHeaders: true,
+				keyGenerator: req => {
+					const authHeader = req.headers["authorization"]
+
+					if (!authHeader) {
+						return req.ip ?? "ip"
+					}
+
+					const match = authHeader.match(
+						/AWS4-HMAC-SHA256\s*Credential=([^,]+),\s*SignedHeaders=([^,]+),\s*Signature=([a-fA-F0-9]+)/
+					)
+
+					if (!match) {
+						return req.ip ?? "ip"
+					}
+
+					const [, credential] = match
+
+					if (!credential) {
+						return req.ip ?? "ip"
+					}
+
+					const [accessKeyId] = credential.split("/")
+
+					if (!accessKeyId) {
+						return req.ip ?? "ip"
+					}
+
+					return accessKeyId
+				}
+			})
+		)
 
 		this.server.use(body)
 		this.server.use(new Auth(this).handle)

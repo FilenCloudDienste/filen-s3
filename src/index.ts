@@ -37,6 +37,7 @@ export type User = {
 export type RateLimit = {
 	windowMs: number
 	limit: number
+	key: "ip" | "accessKeyId"
 }
 
 export class S3Server {
@@ -62,7 +63,8 @@ export class S3Server {
 		https = false,
 		rateLimit = {
 			windowMs: 1000,
-			limit: 1000
+			limit: 1000,
+			key: "accessKeyId"
 		}
 	}: {
 		hostname?: string
@@ -153,6 +155,10 @@ export class S3Server {
 				standardHeaders: "draft-7",
 				legacyHeaders: true,
 				keyGenerator: req => {
+					if (this.rateLimit.key === "ip") {
+						return req.ip ?? "ip"
+					}
+
 					const authHeader = req.headers["authorization"]
 
 					if (!authHeader) {

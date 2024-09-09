@@ -38,7 +38,10 @@ export class DeleteObject {
 			})
 
 			await Responses.noContent(res)
-		} catch {
+		} catch (e) {
+			this.server.logger.log("error", e, "deleteObject")
+			this.server.logger.log("error", e)
+
 			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
 	}

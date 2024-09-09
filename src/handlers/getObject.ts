@@ -116,7 +116,10 @@ export class GetObject {
 			})
 
 			nodeStream.pipe(res)
-		} catch {
+		} catch (e) {
+			this.server.logger.log("error", e, "getObject")
+			this.server.logger.log("error", e)
+
 			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
 	}

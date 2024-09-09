@@ -118,7 +118,10 @@ export class ListObjectsV2 {
 			}
 
 			await Responses.listObjectsV2(res, params.prefix, finalObjects, commonPrefixes)
-		} catch {
+		} catch (e) {
+			this.server.logger.log("error", e, "listObjects")
+			this.server.logger.log("error", e)
+
 			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
 	}

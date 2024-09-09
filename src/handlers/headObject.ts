@@ -67,7 +67,10 @@ export class HeadObject {
 					resolve()
 				})
 			})
-		} catch {
+		} catch (e) {
+			this.server.logger.log("error", e, "headObject")
+			this.server.logger.log("error", e)
+
 			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
 	}

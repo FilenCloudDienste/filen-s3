@@ -111,7 +111,10 @@ export class Auth {
 			} else {
 				next()
 			}
-		} catch {
+		} catch (e) {
+			this.server.logger.log("error", e, "auth")
+			this.server.logger.log("error", e)
+
 			Responses.error(res, 400, "BadRequest", "Invalid auth.").catch(() => {})
 		}
 	}

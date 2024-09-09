@@ -22,7 +22,10 @@ export class ListBuckets {
 					displayName: this.server.user.accessKeyId
 				}
 			)
-		} catch {
+		} catch (e) {
+			this.server.logger.log("error", e, "listBuckets")
+			this.server.logger.log("error", e)
+
 			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
 	}

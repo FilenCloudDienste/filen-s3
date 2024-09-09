@@ -21,6 +21,7 @@ import { type Socket } from "net"
 import { v4 as uuidv4 } from "uuid"
 import { type Duplex } from "stream"
 import { rateLimit } from "express-rate-limit"
+import Logger from "./logger"
 
 export type ServerConfig = {
 	hostname: string
@@ -40,6 +41,13 @@ export type RateLimit = {
 	key: "ip" | "accessKeyId"
 }
 
+/**
+ * S3Server
+ *
+ * @export
+ * @class S3Server
+ * @typedef {S3Server}
+ */
 export class S3Server {
 	public readonly server: Express
 	public readonly serverConfig: ServerConfig
@@ -55,7 +63,37 @@ export class S3Server {
 		| null = null
 	public connections: Record<string, Socket | Duplex> = {}
 	public rateLimit: RateLimit
+	public logger: Logger
 
+	/**
+	 * Creates an instance of S3Server.
+	 *
+	 * @constructor
+	 * @public
+	 * @param {{
+	 * 		hostname?: string
+	 * 		port?: number
+	 * 		https?: boolean
+	 * 		user: {
+	 * 			sdkConfig?: FilenSDKConfig
+	 * 			sdk?: FilenSDK
+	 * 			accessKeyId: string
+	 * 			secretKeyId: string
+	 * 		}
+	 * 		rateLimit?: RateLimit,
+	 * 		disableLogging?: boolean
+	 * 	}} param0
+	 * @param {string} [param0.hostname="127.0.0.1"]
+	 * @param {number} [param0.port=1700]
+	 * @param {{ sdkConfig?: FilenSDKConfig; sdk?: FilenSDK; accessKeyId: string; secretKeyId: string; }} param0.user
+	 * @param {boolean} [param0.https=false]
+	 * @param {RateLimit} [param0.rateLimit={
+	 * 			windowMs: 1000,
+	 * 			limit: 1000,
+	 * 			key: "accessKeyId"
+	 * 		}]
+	 * @param {boolean} [param0.disableLogging=false]
+	 */
 	public constructor({
 		hostname = "127.0.0.1",
 		port = 1700,
@@ -65,7 +103,8 @@ export class S3Server {
 			windowMs: 1000,
 			limit: 1000,
 			key: "accessKeyId"
-		}
+		},
+		disableLogging = false
 	}: {
 		hostname?: string
 		port?: number
@@ -77,14 +116,15 @@ export class S3Server {
 			secretKeyId: string
 		}
 		rateLimit?: RateLimit
+		disableLogging?: boolean
 	}) {
 		this.serverConfig = {
 			hostname,
 			port,
 			https
 		}
-
 		this.rateLimit = rateLimit
+		this.logger = new Logger(disableLogging, false)
 
 		if (!user.sdk && !user.sdkConfig) {
 			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
@@ -113,6 +153,13 @@ export class S3Server {
 		this.server = express()
 	}
 
+	/**
+	 * Get a read/write mutex for a path.
+	 *
+	 * @public
+	 * @param {string} path
+	 * @returns {ISemaphore}
+	 */
 	public getRWMutex(path: string): ISemaphore {
 		if (!this.rwMutex[path]) {
 			this.rwMutex[path] = new Semaphore(1)
@@ -121,6 +168,14 @@ export class S3Server {
 		return this.rwMutex[path]!
 	}
 
+	/**
+	 * Get object stats.
+	 *
+	 * @public
+	 * @async
+	 * @param {string} key
+	 * @returns {Promise<{ exists: false } | { exists: true; stats: FSStats }>}
+	 */
 	public async getObject(key: string): Promise<{ exists: false } | { exists: true; stats: FSStats }> {
 		try {
 			const stats = await this.sdk.fs().stat({ path: normalizeKey(key) })

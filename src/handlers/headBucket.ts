@@ -24,7 +24,10 @@ export class HeadBucket {
 					resolve()
 				})
 			})
-		} catch {
+		} catch (e) {
+			this.server.logger.log("error", e, "headBucket")
+			this.server.logger.log("error", e)
+
 			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
 	}

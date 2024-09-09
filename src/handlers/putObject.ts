@@ -193,7 +193,10 @@ export class PutObject {
 			res.set("ETag", item.uuid)
 
 			await Responses.ok(res)
-		} catch {
+		} catch (e) {
+			this.server.logger.log("error", e, "putObject")
+			this.server.logger.log("error", e)
+
 			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
 	}

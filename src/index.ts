@@ -1,5 +1,5 @@
 import express, { type Express, type Request, type Response } from "express"
-import FilenSDK, { type FilenSDKConfig, type FSStats } from "@filen/sdk"
+import FilenSDK, { type FilenSDKConfig, type FSStats, type SocketEvent } from "@filen/sdk"
 import https from "https"
 import Certs from "./certs"
 import Errors from "./middlewares/errors"
@@ -22,6 +22,8 @@ import { v4 as uuidv4 } from "uuid"
 import { type Duplex } from "stream"
 import { rateLimit } from "express-rate-limit"
 import Logger from "./logger"
+import cluster from "cluster"
+import os from "os"
 
 export type ServerConfig = {
 	hostname: string
@@ -30,9 +32,10 @@ export type ServerConfig = {
 }
 
 export type User = {
-	sdkConfig: FilenSDKConfig
+	sdkConfig?: FilenSDKConfig
 	accessKeyId: string
 	secretKeyId: string
+	sdk?: FilenSDK
 }
 
 export type RateLimit = {
@@ -64,6 +67,7 @@ export class S3Server {
 	public connections: Record<string, Socket | Duplex> = {}
 	public rateLimit: RateLimit
 	public logger: Logger
+	public isCluster: boolean
 
 	/**
 	 * Creates an instance of S3Server.
@@ -80,8 +84,9 @@ export class S3Server {
 	 * 			accessKeyId: string
 	 * 			secretKeyId: string
 	 * 		}
-	 * 		rateLimit?: RateLimit,
-	 * 		disableLogging?: boolean
+	 * 		rateLimit?: RateLimit
+	 * 		disableLogging?: boolean,
+	 * 		isCluster?: boolean
 	 * 	}} param0
 	 * @param {string} [param0.hostname="127.0.0.1"]
 	 * @param {number} [param0.port=1700]
@@ -93,6 +98,7 @@ export class S3Server {
 	 * 			key: "accessKeyId"
 	 * 		}]
 	 * @param {boolean} [param0.disableLogging=false]
+	 * @param {boolean} [param0.isCluster=false]
 	 */
 	public constructor({
 		hostname = "127.0.0.1",
@@ -104,19 +110,16 @@ export class S3Server {
 			limit: 1000,
 			key: "accessKeyId"
 		},
-		disableLogging = false
+		disableLogging = false,
+		isCluster = false
 	}: {
 		hostname?: string
 		port?: number
 		https?: boolean
-		user: {
-			sdkConfig?: FilenSDKConfig
-			sdk?: FilenSDK
-			accessKeyId: string
-			secretKeyId: string
-		}
+		user: User
 		rateLimit?: RateLimit
 		disableLogging?: boolean
+		isCluster?: boolean
 	}) {
 		this.serverConfig = {
 			hostname,
@@ -125,32 +128,76 @@ export class S3Server {
 		}
 		this.rateLimit = rateLimit
 		this.logger = new Logger(disableLogging, false)
+		this.isCluster = isCluster
 
 		if (!user.sdk && !user.sdkConfig) {
 			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
 		}
 
 		if (user.sdk) {
-			this.user = {
-				...user,
-				sdkConfig: user.sdk.config
-			}
 			this.sdk = user.sdk
-		} else if (user.sdkConfig) {
 			this.user = {
 				...user,
-				sdkConfig: user.sdkConfig
+				sdkConfig: user.sdk.config,
+				sdk: this.sdk
 			}
+		} else if (user.sdkConfig) {
 			this.sdk = new FilenSDK({
 				...user.sdkConfig,
 				connectToSocket: true,
 				metadataCache: true
 			})
+			this.user = {
+				...user,
+				sdkConfig: user.sdkConfig,
+				sdk: this.sdk
+			}
 		} else {
 			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
 		}
 
 		this.server = express()
+
+		if (!this.isCluster) {
+			this.sdk.socket.on("socketEvent", (event: SocketEvent) => {
+				if (event.type === "passwordChanged") {
+					this.user.sdk = undefined
+					this.user.sdkConfig = undefined
+
+					this.stop().catch(() => {})
+				}
+			})
+
+			this.monitorAPIKey().catch(() => {})
+		}
+	}
+
+	/**
+	 * Monitor the API key and uninit the server if needed.
+	 *
+	 * @private
+	 * @async
+	 * @returns {Promise<void>}
+	 */
+	private async monitorAPIKey(): Promise<void> {
+		if (this.isCluster) {
+			return
+		}
+
+		try {
+			if (this.sdk && !(await this.sdk.user().checkAPIKeyValidity())) {
+				this.user.sdk = undefined
+				this.user.sdkConfig = undefined
+
+				await this.stop()
+			}
+		} catch {
+			// Noop
+		} finally {
+			await new Promise<void>(resolve => setTimeout(resolve, 15000))
+
+			this.monitorAPIKey().catch(() => {})
+		}
 	}
 
 	/**
@@ -199,6 +246,10 @@ export class S3Server {
 	 * @returns {Promise<void>}
 	 */
 	public async start(): Promise<void> {
+		if (!this.user.sdk && !this.user.sdkConfig) {
+			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
+		}
+
 		this.connections = {}
 
 		this.server.disable("x-powered-by")
@@ -346,6 +397,242 @@ export class S3Server {
 				}
 			}
 		})
+	}
+}
+
+export class S3ServerCluster {
+	private user: User
+	private serverConfig: ServerConfig
+	private rateLimit: RateLimit
+	private threads: number
+	private workers: Record<
+		number,
+		{
+			worker: ReturnType<typeof cluster.fork>
+			ready: boolean
+		}
+	> = {}
+	private stopSpawning: boolean = false
+	private enableHTTPS: boolean
+	private sdk: FilenSDK
+
+	public constructor({
+		hostname = "127.0.0.1",
+		port = 1700,
+		user,
+		https = false,
+		rateLimit = {
+			windowMs: 1000,
+			limit: 1000,
+			key: "accessKeyId"
+		},
+		threads
+	}: {
+		hostname?: string
+		port?: number
+		https?: boolean
+		user: User
+		rateLimit?: RateLimit
+		threads?: number
+	}) {
+		this.serverConfig = {
+			hostname,
+			port,
+			https
+		}
+		this.rateLimit = rateLimit
+		this.user = user
+		this.threads = typeof threads === "number" ? threads : os.cpus().length
+		this.enableHTTPS = https
+
+		if (!this.user.sdk && !this.user.sdkConfig) {
+			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
+		}
+
+		if (this.user.sdk) {
+			this.sdk = this.user.sdk
+		} else {
+			this.sdk = new FilenSDK({
+				...this.user.sdkConfig,
+				connectToSocket: true,
+				metadataCache: true
+			})
+		}
+
+		this.sdk.socket.on("socketEvent", (event: SocketEvent) => {
+			if (event.type === "passwordChanged") {
+				this.user.sdk = undefined
+				this.user.sdkConfig = undefined
+
+				this.stop().catch(() => {})
+			}
+		})
+
+		this.monitorAPIKey().catch(() => {})
+	}
+
+	/**
+	 * Monitor the API key and uninit the server if needed.
+	 *
+	 * @private
+	 * @async
+	 * @returns {Promise<void>}
+	 */
+	private async monitorAPIKey(): Promise<void> {
+		try {
+			if (this.sdk && !(await this.sdk.user().checkAPIKeyValidity())) {
+				this.user.sdk = undefined
+				this.user.sdkConfig = undefined
+
+				await this.stop()
+			}
+		} catch {
+			// Noop
+		} finally {
+			await new Promise<void>(resolve => setTimeout(resolve, 15000))
+
+			this.monitorAPIKey().catch(() => {})
+		}
+	}
+
+	/**
+	 * Spawn a worker.
+	 *
+	 * @private
+	 */
+	private spawnWorker(): void {
+		if (this.stopSpawning) {
+			return
+		}
+
+		const worker = cluster.fork()
+
+		this.workers[worker.id] = {
+			worker,
+			ready: false
+		}
+	}
+
+	/**
+	 * Fork all needed threads.
+	 *
+	 * @private
+	 * @async
+	 * @returns {Promise<"master" | "worker">}
+	 */
+	private async startCluster(): Promise<"master" | "worker"> {
+		if (cluster.isPrimary) {
+			return await new Promise<"master" | "worker">((resolve, reject) => {
+				try {
+					let workersReady = 0
+
+					for (let i = 0; i < this.threads; i++) {
+						this.spawnWorker()
+					}
+
+					cluster.on("exit", async worker => {
+						if (workersReady < this.threads) {
+							return
+						}
+
+						workersReady--
+
+						delete this.workers[worker.id]
+
+						await new Promise<void>(resolve => setTimeout(resolve, 1000))
+
+						try {
+							this.spawnWorker()
+						} catch {
+							// Noop
+						}
+					})
+
+					const errorTimeout = setTimeout(() => {
+						reject(new Error("Could not spawn all workers."))
+					}, 15000)
+
+					cluster.on("message", (worker, message) => {
+						if (message === "ready" && this.workers[worker.id]) {
+							workersReady++
+
+							this.workers[worker.id]!.ready = true
+
+							if (workersReady >= this.threads) {
+								clearTimeout(errorTimeout)
+
+								resolve("master")
+							}
+						}
+					})
+				} catch (e) {
+					reject(e)
+				}
+			})
+		}
+
+		const server = new S3Server({
+			hostname: this.serverConfig.hostname,
+			port: this.serverConfig.port,
+			disableLogging: true,
+			user: this.user,
+			rateLimit: this.rateLimit,
+			https: this.enableHTTPS,
+			isCluster: true
+		})
+
+		await server.start()
+
+		if (process.send) {
+			process.send("ready")
+		}
+
+		return "worker"
+	}
+
+	/**
+	 * Start the S3 cluster.
+	 *
+	 * @public
+	 * @async
+	 * @returns {Promise<void>}
+	 */
+	public async start(): Promise<void> {
+		if (!this.user.sdk && !this.user.sdkConfig) {
+			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
+		}
+
+		await new Promise<void>((resolve, reject) => {
+			this.startCluster()
+				.then(type => {
+					if (type === "master") {
+						resolve()
+					}
+				})
+				.catch(reject)
+		})
+	}
+
+	/**
+	 * Stop the S3 cluster.
+	 *
+	 * @public
+	 * @async
+	 * @returns {Promise<void>}
+	 */
+	public async stop(): Promise<void> {
+		cluster.removeAllListeners()
+
+		this.stopSpawning = true
+
+		for (const id in this.workers) {
+			this.workers[id]!.worker.destroy()
+		}
+
+		await new Promise<void>(resolve => setTimeout(resolve, 1000))
+
+		this.workers = {}
+		this.stopSpawning = false
 	}
 }
 

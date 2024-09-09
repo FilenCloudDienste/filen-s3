@@ -79,6 +79,51 @@ await s3
 	.promise()
 ```
 
+3. Initialize the server in cluster mode
+
+```typescript
+import FilenSDK from "@filen/sdk"
+import path from "path"
+import os from "os"
+import { S3ServerCluster } from "@filen/s3"
+import { S3 } from "aws-sdk"
+
+// Initialize a SDK instance (optional)
+const filen = new FilenSDK({
+	metadataCache: true,
+	connectToSocket: true,
+	tmpPath: path.join(os.tmpdir(), "filen-sdk")
+})
+
+await filen.login({
+	email: "your@email.com",
+	password: "supersecret123",
+	twoFactorCode: "123456"
+})
+
+const hostname = "127.0.0.1"
+const port = 1700
+const https = false
+const endpoint = `${https ? "https" : "http"}://${hostname === "127.0.0.1" ? "local.s3.filen.io" : hostname}:${port}`
+
+const server = new S3ServerCluster({
+	hostname,
+	port,
+	https,
+	user: {
+		accessKeyId: "admin",
+		secretKeyId: "admin",
+		sdk: filen
+	},
+	threads: 16 // Number of threads to spawn. Defaults to CPU core count if omitted.
+})
+
+// Start the cluster
+await server.start()
+
+console.log(`S3 server cluster started on ${endpoint}`)
+```
+
 ## S3 Compatibility
 
 <b>Only methods listed here are currently implemented.</b>

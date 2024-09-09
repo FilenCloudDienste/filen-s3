@@ -67,7 +67,6 @@ export class S3Server {
 	public connections: Record<string, Socket | Duplex> = {}
 	public rateLimit: RateLimit
 	public logger: Logger
-	public isCluster: boolean
 
 	/**
 	 * Creates an instance of S3Server.
@@ -78,19 +77,13 @@ export class S3Server {
 	 * 		hostname?: string
 	 * 		port?: number
 	 * 		https?: boolean
-	 * 		user: {
-	 * 			sdkConfig?: FilenSDKConfig
-	 * 			sdk?: FilenSDK
-	 * 			accessKeyId: string
-	 * 			secretKeyId: string
-	 * 		}
+	 * 		user: User
 	 * 		rateLimit?: RateLimit
-	 * 		disableLogging?: boolean,
-	 * 		isCluster?: boolean
+	 * 		disableLogging?: boolean
 	 * 	}} param0
 	 * @param {string} [param0.hostname="127.0.0.1"]
 	 * @param {number} [param0.port=1700]
-	 * @param {{ sdkConfig?: FilenSDKConfig; sdk?: FilenSDK; accessKeyId: string; secretKeyId: string; }} param0.user
+	 * @param {User} param0.user
 	 * @param {boolean} [param0.https=false]
 	 * @param {RateLimit} [param0.rateLimit={
 	 * 			windowMs: 1000,
@@ -98,7 +91,6 @@ export class S3Server {
 	 * 			key: "accessKeyId"
 	 * 		}]
 	 * @param {boolean} [param0.disableLogging=false]
-	 * @param {boolean} [param0.isCluster=false]
 	 */
 	public constructor({
 		hostname = "127.0.0.1",
@@ -110,8 +102,7 @@ export class S3Server {
 			limit: 1000,
 			key: "accessKeyId"
 		},
-		disableLogging = false,
-		isCluster = false
+		disableLogging = false
 	}: {
 		hostname?: string
 		port?: number
@@ -119,7 +110,6 @@ export class S3Server {
 		user: User
 		rateLimit?: RateLimit
 		disableLogging?: boolean
-		isCluster?: boolean
 	}) {
 		this.serverConfig = {
 			hostname,
@@ -128,7 +118,6 @@ export class S3Server {
 		}
 		this.rateLimit = rateLimit
 		this.logger = new Logger(disableLogging, false)
-		this.isCluster = isCluster
 
 		if (!user.sdk && !user.sdkConfig) {
 			throw new Error("Either pass a configured SDK instance OR a SDKConfig object to the user object.")
@@ -158,46 +147,14 @@ export class S3Server {
 
 		this.server = express()
 
-		if (!this.isCluster) {
-			this.sdk.socket.on("socketEvent", (event: SocketEvent) => {
-				if (event.type === "passwordChanged") {
-					this.user.sdk = undefined
-					this.user.sdkConfig = undefined
-
-					this.stop().catch(() => {})
-				}
-			})
-
-			this.monitorAPIKey().catch(() => {})
-		}
-	}
-
-	/**
-	 * Monitor the API key and uninit the server if needed.
-	 *
-	 * @private
-	 * @async
-	 * @returns {Promise<void>}
-	 */
-	private async monitorAPIKey(): Promise<void> {
-		if (this.isCluster) {
-			return
-		}
-
-		try {
-			if (this.sdk && !(await this.sdk.user().checkAPIKeyValidity())) {
+		this.sdk.socket.on("socketEvent", (event: SocketEvent) => {
+			if (event.type === "passwordChanged") {
 				this.user.sdk = undefined
 				this.user.sdkConfig = undefined
 
-				await this.stop()
+				this.stop(true).catch(() => {})
 			}
-		} catch {
-			// Noop
-		} finally {
-			await new Promise<void>(resolve => setTimeout(resolve, 15000))
-
-			this.monitorAPIKey().catch(() => {})
-		}
+		})
 	}
 
 	/**
@@ -467,32 +424,6 @@ export class S3ServerCluster {
 				this.stop().catch(() => {})
 			}
 		})
-
-		this.monitorAPIKey().catch(() => {})
-	}
-
-	/**
-	 * Monitor the API key and uninit the server if needed.
-	 *
-	 * @private
-	 * @async
-	 * @returns {Promise<void>}
-	 */
-	private async monitorAPIKey(): Promise<void> {
-		try {
-			if (this.sdk && !(await this.sdk.user().checkAPIKeyValidity())) {
-				this.user.sdk = undefined
-				this.user.sdkConfig = undefined
-
-				await this.stop()
-			}
-		} catch {
-			// Noop
-		} finally {
-			await new Promise<void>(resolve => setTimeout(resolve, 15000))
-
-			this.monitorAPIKey().catch(() => {})
-		}
 	}
 
 	/**
@@ -577,8 +508,7 @@ export class S3ServerCluster {
 			disableLogging: true,
 			user: this.user,
 			rateLimit: this.rateLimit,
-			https: this.enableHTTPS,
-			isCluster: true
+			https: this.enableHTTPS
 		})
 
 		await server.start()

@@ -57,7 +57,7 @@ export function platformConfigPath(): string {
 		throw new Error("Could not find homedir path.")
 	}
 
-	configPath = pathModule.join(configPath, "filen-s3")
+	configPath = pathModule.join(configPath, "@filen", "s3")
 
 	if (!fs.existsSync(configPath)) {
 		fs.mkdirSync(configPath, {

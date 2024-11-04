@@ -22,10 +22,10 @@ npm install @filen/s3@latest
 2. Initialize the server and query it using aws-sdk
 
 ```typescript
-import FilenSDK from "@filen/sdk"
+import { FilenSDK } from "@filen/sdk"
 import path from "path"
 import os from "os"
-import S3Server from "@filen/s3"
+import { S3Server } from "@filen/s3"
 import { S3 } from "aws-sdk"
 
 // Initialize a SDK instance (optional)
@@ -82,7 +82,7 @@ await s3
 3. Initialize the server in cluster mode
 
 ```typescript
-import FilenSDK from "@filen/sdk"
+import { FilenSDK } from "@filen/sdk"
 import path from "path"
 import os from "os"
 import { S3ServerCluster } from "@filen/s3"

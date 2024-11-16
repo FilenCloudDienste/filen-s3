@@ -3,6 +3,7 @@ import Responses from "../responses"
 import type Server from "../"
 import pathModule from "path"
 import { normalizeKey, extractKeyFromRequestParams } from "../utils"
+import { Readable } from "stream"
 
 export class PutObject {
 	public constructor(private readonly server: Server) {
@@ -105,6 +106,8 @@ export class PutObject {
 			}
 
 			const isCopy = typeof req.headers["x-amz-copy-source"] === "string" && req.headers["x-amz-copy-source"].length > 0
+			//const lastModified = typeof req.headers["x-amz-meta-mtime"] === "string" && req.headers["x-amz-meta-mtime"].length > 0 ? convertTimestampToMs(parseInt(req.headers["x-amz-meta-mtime"])) : Date.now()
+			//const creation = typeof req.headers["x-amz-meta-creation-time"] === "string" && req.headers["x-amz-meta-creation-time"].length > 0 ? convertTimestampToMs(parseInt(req.headers["x-amz-meta-creation-time"])) : Date.now()
 
 			if (isCopy) {
 				await this.copy(req, res)
@@ -118,8 +121,8 @@ export class PutObject {
 				return
 			}
 
-			if (!req.bodyStream || !req.bodySize || req.bodySize === 0) {
-				await Responses.error(res, 400, "BadRequest", "Invalid body stream.")
+			if (!req.bodySize || req.bodySize === 0 || !req.rawBody) {
+				await Responses.error(res, 400, "BadRequest", "Invalid body.")
 
 				return
 			}
@@ -148,7 +151,7 @@ export class PutObject {
 
 			let didError = false
 			const item = await this.server.sdk.cloud().uploadLocalFileStream({
-				source: req.bodyStream,
+				source: Readable.from(req.rawBody),
 				parent: parentObject.stats.uuid,
 				name,
 				onError: () => {
@@ -190,7 +193,8 @@ export class PutObject {
 				}
 			})
 
-			res.set("ETag", item.uuid)
+			res.set("E-Tag", `"${item.uuid}"`)
+			res.set("Last-Modified", new Date(item.lastModified).toUTCString())
 
 			await Responses.ok(res)
 		} catch (e) {

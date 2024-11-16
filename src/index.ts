@@ -24,6 +24,7 @@ import { rateLimit } from "express-rate-limit"
 import Logger from "./logger"
 import cluster from "cluster"
 import os from "os"
+import PutBucket from "./handlers/putBucket"
 
 export type ServerConfig = {
 	hostname: string
@@ -264,6 +265,7 @@ export class S3Server {
 		this.server.head(`/${this.bucketName}/:key*`, new HeadObject(this).handle)
 		this.server.delete(`/${this.bucketName}/:key*`, new DeleteObject(this).handle)
 		this.server.put(`/${this.bucketName}/:key*`, new PutObject(this).handle)
+		this.server.put(`/${this.bucketName}`, new PutBucket(this).handle)
 
 		this.server.use((_: Request, res: Response) => {
 			Responses.error(res, 501, "NotImplemented", "The requested method is not implemented.").catch(() => {})

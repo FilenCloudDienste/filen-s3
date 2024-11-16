@@ -2,6 +2,7 @@ import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
 import { normalizeKey, streamToXML, promiseAllSettledChunked } from "../utils"
+import { Readable } from "stream"
 
 export type DeleteObjectsXML = {
 	Delete?: {
@@ -16,13 +17,13 @@ export class DeleteObjects {
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
 		try {
-			if (!req.url.includes("?delete") || !req.bodyStream) {
+			if (!req.url.includes("?delete") || !req.rawBody) {
 				next()
 
 				return
 			}
 
-			const xml = await streamToXML<DeleteObjectsXML>(req.bodyStream)
+			const xml = await streamToXML<DeleteObjectsXML>(Readable.from(req.rawBody))
 
 			if (!xml || !xml.Delete || !xml.Delete.Object) {
 				await Responses.error(res, 400, "BadRequest", "Invalid delete XML.")

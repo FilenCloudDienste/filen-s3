@@ -1,25 +1,19 @@
 import { type Request, type Response, type NextFunction } from "express"
 import crypto from "crypto"
-import { PassThrough } from "stream"
 import Responses from "../responses"
 
 export default function body(req: Request, res: Response, next: NextFunction): void {
 	const hash = crypto.createHash("sha256")
-	const passThrough = new PassThrough()
 	let size = 0
-
-	req.bodyStream = passThrough
+	const chunks: Buffer[] = []
 
 	req.on("data", async chunk => {
 		try {
 			if (chunk instanceof Buffer) {
 				size += chunk.byteLength
 
+				chunks.push(chunk)
 				hash.update(chunk)
-
-				if (!passThrough.write(chunk)) {
-					await new Promise<void>(resolve => passThrough.once("drain", resolve))
-				}
 			}
 		} catch {
 			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
@@ -27,15 +21,14 @@ export default function body(req: Request, res: Response, next: NextFunction): v
 	})
 
 	req.on("end", () => {
-		req.bodyHash = hash.digest("hex")
-		req.bodySize = size
+		try {
+			req.bodyHash = hash.digest("hex")
+			req.bodySize = size
+			req.rawBody = Buffer.concat(chunks)
 
-		passThrough.end()
-
-		next()
-	})
-
-	req.on("error", err => {
-		passThrough.emit("error", err)
+			next()
+		} catch {
+			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
+		}
 	})
 }

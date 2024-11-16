@@ -6,6 +6,24 @@ import { parseString } from "xml2js"
 import { type Readable } from "stream"
 
 /**
+ * Convert a UNIX style timestamp (in seconds) to milliseconds
+ * @date 1/31/2024 - 4:10:35 PM
+ *
+ * @export
+ * @param {number} timestamp
+ * @returns {number}
+ */
+export function convertTimestampToMs(timestamp: number): number {
+	const now = Date.now()
+
+	if (Math.abs(now - timestamp) < Math.abs(now - timestamp * 1000)) {
+		return timestamp
+	}
+
+	return Math.floor(timestamp * 1000)
+}
+
+/**
  * Chunk large Promise.all executions.
  * @date 2/14/2024 - 11:59:34 PM
  *

@@ -122,6 +122,7 @@ export class Responses {
 
 		res.set("Content-Type", "application/xml; charset=utf-8")
 		res.set("Content-Length", Buffer.from(response, "utf-8").byteLength.toString())
+		res.set("E-Tag", `"${result.eTag}"`)
 		res.status(200)
 
 		await new Promise<void>(resolve => {

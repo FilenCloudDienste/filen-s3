@@ -24,7 +24,6 @@ export class HeadObject {
 			}
 
 			const key = extractKeyFromRequestParams(req)
-
 			const object = await this.server.getObject(key)
 
 			if (!object.exists || object.stats.type === "directory") {
@@ -61,6 +60,8 @@ export class HeadObject {
 
 			res.set("Content-Type", mimeType)
 			res.set("Accept-Ranges", "bytes")
+			res.set("Last-Modified", new Date(object.stats.mtimeMs).toUTCString())
+			res.set("E-Tag", `"${object.stats.uuid}"`)
 
 			await new Promise<void>(resolve => {
 				res.end(() => {

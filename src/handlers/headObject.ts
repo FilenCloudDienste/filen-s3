@@ -38,6 +38,11 @@ export class HeadObject {
 			let start = 0
 			let end = totalLength - 1
 
+			res.set("Content-Type", mimeType)
+			res.set("Accept-Ranges", "bytes")
+			res.set("Last-Modified", new Date(object.stats.mtimeMs).toUTCString())
+			res.set("E-Tag", `"${object.stats.uuid}"`)
+
 			if (range) {
 				const parsedRange = parseByteRange(range, totalLength)
 
@@ -57,11 +62,6 @@ export class HeadObject {
 				res.status(200)
 				res.set("Content-Length", object.stats.size.toString())
 			}
-
-			res.set("Content-Type", mimeType)
-			res.set("Accept-Ranges", "bytes")
-			res.set("Last-Modified", new Date(object.stats.mtimeMs).toUTCString())
-			res.set("E-Tag", `"${object.stats.uuid}"`)
 
 			await new Promise<void>(resolve => {
 				res.end(() => {

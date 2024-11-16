@@ -2,7 +2,7 @@ import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
 import pathModule from "path"
-import { normalizeKey, extractKeyFromRequestParams } from "../utils"
+import { normalizeKey, extractKeyFromRequestParams, convertTimestampToMs } from "../utils"
 import { Readable } from "stream"
 
 export class PutObject {
@@ -106,8 +106,6 @@ export class PutObject {
 			}
 
 			const isCopy = typeof req.headers["x-amz-copy-source"] === "string" && req.headers["x-amz-copy-source"].length > 0
-			//const lastModified = typeof req.headers["x-amz-meta-mtime"] === "string" && req.headers["x-amz-meta-mtime"].length > 0 ? convertTimestampToMs(parseInt(req.headers["x-amz-meta-mtime"])) : Date.now()
-			//const creation = typeof req.headers["x-amz-meta-creation-time"] === "string" && req.headers["x-amz-meta-creation-time"].length > 0 ? convertTimestampToMs(parseInt(req.headers["x-amz-meta-creation-time"])) : Date.now()
 
 			if (isCopy) {
 				await this.copy(req, res)
@@ -149,11 +147,31 @@ export class PutObject {
 				return
 			}
 
+			const now = Date.now()
+			let lastModified =
+				typeof req.headers["x-amz-meta-mtime"] === "string" && req.headers["x-amz-meta-mtime"].length > 0
+					? convertTimestampToMs(parseInt(req.headers["x-amz-meta-mtime"]))
+					: now
+			let creation =
+				typeof req.headers["x-amz-meta-creation-time"] === "string" && req.headers["x-amz-meta-creation-time"].length > 0
+					? convertTimestampToMs(parseInt(req.headers["x-amz-meta-creation-time"]))
+					: now
+
+			if (lastModified >= now) {
+				lastModified = now
+			}
+
+			if (creation >= now) {
+				creation = now
+			}
+
 			let didError = false
 			const item = await this.server.sdk.cloud().uploadLocalFileStream({
 				source: Readable.from(req.rawBody),
 				parent: parentObject.stats.uuid,
 				name,
+				lastModified,
+				creation,
 				onError: () => {
 					didError = true
 

@@ -28,6 +28,11 @@ export class Auth {
 
 				return true
 			},
+			onAfterParse(message, req) {
+				req.bodyHash = message.bodyHash
+
+				return true
+			},
 			secretKey: message => {
 				if (message.accessKey === this.server.user.accessKeyId) {
 					return this.server.user.secretKeyId

@@ -4,7 +4,7 @@ import type Server from "../"
 import { Readable } from "stream"
 import { type ReadableStream as ReadableStreamWebType } from "stream/web"
 import mimeTypes from "mime-types"
-import { parseByteRange, extractKeyFromRequestParams } from "../utils"
+import { parseByteRange, extractKeyAndBucketFromRequestParams } from "../utils"
 
 export class GetObject {
 	public constructor(private readonly server: Server) {
@@ -19,15 +19,15 @@ export class GetObject {
 				return
 			}
 
-			if (typeof req.params.key !== "string" || req.params.key.length === 0) {
+			const { key, bucket, path } = extractKeyAndBucketFromRequestParams(req)
+
+			if (!key || !bucket || !path) {
 				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 
 				return
 			}
 
-			const key = extractKeyFromRequestParams(req)
-
-			const object = await this.server.getObject(key)
+			const object = await this.server.getObject(path)
 
 			if (!object.exists || object.stats.type === "directory") {
 				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
@@ -64,6 +64,8 @@ export class GetObject {
 			res.set("Content-Disposition", `attachment; filename="${object.stats.name}"`)
 			res.set("Content-Type", mimeType)
 			res.set("Accept-Ranges", "bytes")
+			res.set("Last-Modified", new Date(object.stats.mtimeMs).toUTCString())
+			res.set("E-Tag", `"${object.stats.uuid}"`)
 
 			const stream = this.server.sdk.cloud().downloadFileToReadableStream({
 				uuid: object.stats.uuid,

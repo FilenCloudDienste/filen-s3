@@ -178,22 +178,30 @@ export function normalizeKey(key: string): string {
 }
 
 /**
- * Extract the key parameter from the express router request.
+ * Extract the key and bucket parameter from the express router request.
  *
  * @export
  * @param {Request} req
- * @returns {string}
+ * @returns {({ bucket: string | null; key: string | null; path: string | null })}
  */
-export function extractKeyFromRequestParams(req: Request): string {
-	const base = req.params.key
+export function extractKeyAndBucketFromRequestParams(req: Request): { bucket: string | null; key: string | null; path: string | null } {
+	const key =
+		typeof req.params.key === "string" && req.params.key.length > 0
+			? typeof req.params["0"] === "string" && req.params["0"].length > 0
+				? pathModule.posix.join(decodeURIComponent(req.params.key), decodeURIComponent(req.params["0"]))
+				: decodeURIComponent(req.params.key)
+			: null
 
-	if (typeof base !== "string" || base.length === 0) {
-		throw new Error("Invalid key parameter.")
+	const bucket =
+		typeof req.params.bucket === "string" && req.params.bucket.length > 0 && !req.params.bucket.includes("/")
+			? decodeURIComponent(req.params.bucket)
+			: null
+
+	return {
+		key,
+		bucket,
+		path: key && bucket ? normalizeKey(pathModule.posix.join(bucket, key)) : null
 	}
-
-	return typeof req.params["0"] === "string" && req.params["0"].length > 0
-		? pathModule.posix.join(decodeURI(base), decodeURI(req.params["0"]))
-		: base
 }
 
 /**
@@ -243,4 +251,76 @@ export function streamToXML<T>(stream: Readable): Promise<T> {
 			})
 			.catch(reject)
 	})
+}
+
+/**
+ * Validates an S3 bucket name.
+ * @param bucketName - The bucket name to validate.
+ * @returns True if the bucket name is valid, otherwise false.
+ */
+export function isValidBucketName(bucketName: string): boolean {
+	// Bucket name must be between 3 and 63 characters
+	if (bucketName.length < 3 || bucketName.length > 63) {
+		return false
+	}
+
+	// Bucket name can only contain lowercase letters, numbers, hyphens, and periods
+	const bucketNameRegex = /^[a-z0-9.-]+$/
+
+	if (!bucketNameRegex.test(bucketName)) {
+		return false
+	}
+
+	// Bucket name must start and end with a letter or number
+	if (!/^[a-z0-9]/.test(bucketName) || !/[a-z0-9]$/.test(bucketName)) {
+		return false
+	}
+
+	// Consecutive periods are not allowed
+	if (bucketName.includes("..")) {
+		return false
+	}
+
+	// Bucket name cannot be formatted as an IP address
+	const ipAddressRegex = /^(?:\d{1,3}\.){3}\d{1,3}$/
+
+	if (ipAddressRegex.test(bucketName)) {
+		return false
+	}
+
+	return true
+}
+
+/**
+ * Validates an S3 object key.
+ * @param key - The object key to validate.
+ * @returns True if the key is valid, otherwise false.
+ */
+export function isValidObjectKey(key: string): boolean {
+	// Key must not be empty
+	if (key.length === 0) {
+		return false
+	}
+
+	// Key length must be between 1 and 1024 characters
+	if (key.length > 1024) {
+		return false
+	}
+
+	// Key must not contain unprintable ASCII characters (ASCII 0-31) or delete (ASCII 127)
+	// eslint-disable-next-line no-control-regex
+	const controlCharsRegex = /[\x00-\x1F\x7F]/
+
+	if (controlCharsRegex.test(key)) {
+		return false
+	}
+
+	// Key must not contain invalid Unicode surrogates
+	try {
+		decodeURIComponent(encodeURIComponent(key)) // Validates UTF-8 encoding
+	} catch {
+		return false
+	}
+
+	return true
 }

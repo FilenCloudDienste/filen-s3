@@ -11,7 +11,6 @@ import HeadObject from "./handlers/headObject"
 import DeleteObject from "./handlers/deleteObject"
 import PutObject from "./handlers/putObject"
 import { normalizeKey } from "./utils"
-import body from "./middlewares/body"
 import HeadBucket from "./handlers/headBucket"
 import DeleteObjects from "./handlers/deleteObjects"
 import Responses from "./responses"
@@ -24,7 +23,9 @@ import { rateLimit } from "express-rate-limit"
 import Logger from "./logger"
 import cluster from "cluster"
 import os from "os"
-import PutBucket from "./handlers/putBucket"
+import CreateBucket from "./handlers/createBucket"
+import body from "./middlewares/body"
+import DeleteBucket from "./handlers/deleteBucket"
 
 export type ServerConfig = {
 	hostname: string
@@ -59,7 +60,6 @@ export class S3Server {
 	public readonly sdk: FilenSDK
 	public readonly region = "filen"
 	public readonly service = "s3"
-	public readonly bucketName = "filen"
 	private readonly rwMutex: Record<string, ISemaphore> = {}
 	public serverInstance:
 		| https.Server<typeof IncomingMessage, typeof ServerResponse>
@@ -254,18 +254,25 @@ export class S3Server {
 			})
 		)
 
+		this.server.use((req, res, next) => {
+			console.log(req.method, req.url)
+
+			next()
+		})
+
 		this.server.use(body)
 		this.server.use(new Auth(this).handle)
 
+		this.server.head("/:bucket/:key*", new HeadObject(this).handle)
+		this.server.get("/:bucket/:key*", new GetObject(this).handle)
+		this.server.delete("/:bucket/:key*", new DeleteObject(this).handle)
+		this.server.put("/:bucket/:key*", new PutObject(this).handle)
+		this.server.head("/:bucket", new HeadBucket(this).handle)
+		this.server.put("/:bucket", new CreateBucket(this).handle)
+		this.server.delete("/:bucket", new DeleteBucket(this).handle)
+		this.server.get("/:bucket", new ListObjects(this).handle)
+		this.server.post("/:bucket", new DeleteObjects(this).handle)
 		this.server.get("/", new ListBuckets(this).handle)
-		this.server.get(`/${this.bucketName}`, new ListObjects(this).handle)
-		this.server.head(`/${this.bucketName}`, new HeadBucket(this).handle)
-		this.server.post(`/${this.bucketName}`, new DeleteObjects(this).handle)
-		this.server.get(`/${this.bucketName}/:key*`, new GetObject(this).handle)
-		this.server.head(`/${this.bucketName}/:key*`, new HeadObject(this).handle)
-		this.server.delete(`/${this.bucketName}/:key*`, new DeleteObject(this).handle)
-		this.server.put(`/${this.bucketName}/:key*`, new PutObject(this).handle)
-		this.server.put(`/${this.bucketName}`, new PutBucket(this).handle)
 
 		this.server.use((_: Request, res: Response) => {
 			Responses.error(res, 501, "NotImplemented", "The requested method is not implemented.").catch(() => {})

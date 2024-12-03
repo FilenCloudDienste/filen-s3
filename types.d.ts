@@ -3,6 +3,7 @@ declare global {
 		interface Request {
 			bodyHash?: string
 			rawBody?: Buffer
+			decodedBody?: Buffer
 			bodySize?: number
 		}
 	}

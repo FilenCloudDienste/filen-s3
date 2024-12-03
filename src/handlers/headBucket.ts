@@ -1,6 +1,7 @@
 import { type Request, type Response } from "express"
 import type Server from "../"
 import Responses from "../responses"
+import { extractKeyAndBucketFromRequestParams, normalizeKey } from "../utils"
 
 export class HeadBucket {
 	public constructor(private readonly server: Server) {
@@ -9,8 +10,18 @@ export class HeadBucket {
 
 	public async handle(req: Request, res: Response): Promise<void> {
 		try {
-			if (req.url !== `/${this.server.bucketName}`) {
-				await Responses.error(res, 404, "NoSuchBucket", "Bucket not found")
+			const { bucket } = extractKeyAndBucketFromRequestParams(req)
+
+			if (!bucket) {
+				await Responses.error(res, 404, "NoSuchBucket", "Bucket not found.")
+
+				return
+			}
+
+			const object = await this.server.getObject(normalizeKey(bucket))
+
+			if (!object.exists || object.stats.type !== "directory") {
+				await Responses.error(res, 404, "NoSuchBucket", "Bucket not found.")
 
 				return
 			}

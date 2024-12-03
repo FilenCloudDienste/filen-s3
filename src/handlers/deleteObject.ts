@@ -1,7 +1,7 @@
 import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
-import { extractKeyFromRequestParams } from "../utils"
+import { extractKeyAndBucketFromRequestParams } from "../utils"
 
 export class DeleteObject {
 	public constructor(private readonly server: Server) {
@@ -16,24 +16,24 @@ export class DeleteObject {
 				return
 			}
 
-			if (typeof req.params.key !== "string" || req.params.key.length === 0) {
-				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+			const { path } = extractKeyAndBucketFromRequestParams(req)
+
+			if (!path) {
+				await Responses.noContent(res)
 
 				return
 			}
 
-			const key = extractKeyFromRequestParams(req)
-
-			const object = await this.server.getObject(key)
+			const object = await this.server.getObject(path)
 
 			if (!object.exists) {
-				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
+				await Responses.noContent(res)
 
 				return
 			}
 
 			await this.server.sdk.fs().unlink({
-				path: `/${key}`,
+				path,
 				permanent: false
 			})
 

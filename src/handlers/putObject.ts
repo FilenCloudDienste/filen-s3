@@ -2,7 +2,7 @@ import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
 import pathModule from "path"
-import { normalizeKey, extractKeyFromRequestParams, convertTimestampToMs } from "../utils"
+import { normalizeKey, extractKeyAndBucketFromRequestParams, convertTimestampToMs, isValidObjectKey } from "../utils"
 import { Readable } from "stream"
 
 export class PutObject {
@@ -19,14 +19,15 @@ export class PutObject {
 			return
 		}
 
-		const copySourceDecoded = decodeURI(copySource)
-		const copySourceNormalized = normalizeKey(
-			copySourceDecoded.startsWith(`/${this.server.bucketName}/`)
-				? copySourceDecoded.slice(`/${this.server.bucketName}/`.length)
-				: copySourceDecoded.startsWith(`${this.server.bucketName}/`)
-				? copySourceDecoded.slice(`${this.server.bucketName}/`.length)
-				: copySourceDecoded
-		)
+		const { key, bucket, path } = extractKeyAndBucketFromRequestParams(req)
+
+		if (!key || !bucket || !path || !isValidObjectKey(key)) {
+			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
+
+			return
+		}
+
+		const copySourceNormalized = normalizeKey(decodeURIComponent(copySource))
 		const copyObject = await this.server.getObject(copySourceNormalized)
 
 		if (!copyObject.exists || copyObject.stats.type === "directory") {
@@ -35,50 +36,50 @@ export class PutObject {
 			return
 		}
 
-		const key = extractKeyFromRequestParams(req)
-		const path = normalizeKey(key)
 		const parentPath = pathModule.posix.dirname(path)
-		const thisObject = await this.server.getObject(key)
-
-		if (thisObject.exists && thisObject.stats.type === "directory") {
-			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
-
-			return
-		}
 
 		await this.server.sdk.fs().mkdir({ path: parentPath })
 
-		const parentObject = await this.server.getObject(parentPath)
+		const thisObject = await this.server.getObject(path)
 
-		if (!parentObject.exists || parentObject.stats.type !== "directory") {
-			await Responses.error(res, 412, "PreconditionFailed", "Parent directory does not exist.")
-
-			return
+		if (thisObject.exists) {
+			await this.server.sdk.fs().unlink({
+				path,
+				permanent: false
+			})
 		}
 
 		await this.server.sdk.fs().copy({
-			from: normalizeKey(copySourceNormalized),
+			from: copySourceNormalized,
 			to: path
 		})
 
-		const copiedObject = await this.server.getObject(key)
+		await this.server.sdk.fs().readdir({ path: parentPath })
 
-		if (!copiedObject.exists || copiedObject.stats.type === "directory") {
+		const copiedStats = await this.server.getObject(path)
+
+		if (!copiedStats.exists || copiedStats.stats.type === "directory") {
 			await Responses.error(res, 500, "InternalError", "Internal server error.")
 
 			return
 		}
 
 		await Responses.copyObject(res, {
-			eTag: copiedObject.stats.uuid,
-			lastModified: copiedObject.stats.lastModified
+			eTag: copiedStats.stats.uuid,
+			lastModified: copiedStats.stats.lastModified
 		})
 	}
 
 	public async mkdir(req: Request, res: Response): Promise<void> {
-		const key = extractKeyFromRequestParams(req)
-		const path = normalizeKey(key)
-		const thisObject = await this.server.getObject(key)
+		const { key, path } = extractKeyAndBucketFromRequestParams(req)
+
+		if (!key || !path || !isValidObjectKey(key)) {
+			await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
+
+			return
+		}
+
+		const thisObject = await this.server.getObject(path)
 
 		if (thisObject.exists) {
 			await Responses.ok(res)
@@ -87,6 +88,7 @@ export class PutObject {
 		}
 
 		await this.server.sdk.fs().mkdir({ path })
+		await this.server.sdk.fs().readdir({ path: pathModule.posix.dirname(path) })
 
 		await Responses.ok(res)
 	}
@@ -99,7 +101,9 @@ export class PutObject {
 				return
 			}
 
-			if (typeof req.params.key !== "string" || req.params.key.length === 0) {
+			const { key, bucket, path } = extractKeyAndBucketFromRequestParams(req)
+
+			if (!key || !bucket || !path || !isValidObjectKey(key)) {
 				await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
 
 				return
@@ -113,29 +117,20 @@ export class PutObject {
 				return
 			}
 
-			if (req.url.trim().endsWith("/") && req.bodySize === 0) {
+			if (req.url.trim().endsWith("/") && (req.bodySize === 0 || !req.decodedBody)) {
 				await this.mkdir(req, res)
 
 				return
 			}
 
-			if (!req.bodySize || req.bodySize === 0 || !req.rawBody) {
+			if (req.bodySize === 0 || !req.decodedBody) {
 				await Responses.error(res, 400, "BadRequest", "Invalid body.")
 
 				return
 			}
 
-			const key = extractKeyFromRequestParams(req)
-			const path = normalizeKey(key)
 			const parentPath = pathModule.posix.dirname(path)
 			const name = pathModule.posix.basename(path)
-			const thisObject = await this.server.getObject(key)
-
-			if (thisObject.exists && thisObject.stats.type === "directory") {
-				await Responses.error(res, 400, "BadRequest", "Invalid key specified.")
-
-				return
-			}
 
 			await this.server.sdk.fs().mkdir({ path: parentPath })
 
@@ -145,6 +140,15 @@ export class PutObject {
 				await Responses.error(res, 412, "PreconditionFailed", "Parent directory does not exist.")
 
 				return
+			}
+
+			const thisObject = await this.server.getObject(path)
+
+			if (thisObject.exists) {
+				await this.server.sdk.fs().unlink({
+					path,
+					permanent: false
+				})
 			}
 
 			const now = Date.now()
@@ -167,7 +171,7 @@ export class PutObject {
 
 			let didError = false
 			const item = await this.server.sdk.cloud().uploadLocalFileStream({
-				source: Readable.from(req.rawBody),
+				source: Readable.from(req.decodedBody),
 				parent: parentObject.stats.uuid,
 				name,
 				lastModified,
@@ -189,27 +193,7 @@ export class PutObject {
 				return
 			}
 
-			await this.server.sdk.fs()._removeItem({ path })
-			await this.server.sdk.fs()._addItem({
-				path,
-				item: {
-					type: "file",
-					uuid: item.uuid,
-					metadata: {
-						name,
-						size: item.size,
-						lastModified: item.lastModified,
-						creation: item.creation,
-						hash: item.hash,
-						key: item.key,
-						bucket: item.bucket,
-						region: item.region,
-						version: item.version,
-						chunks: item.chunks,
-						mime: item.mime
-					}
-				}
-			})
+			await this.server.sdk.fs().readdir({ path: parentPath })
 
 			res.set("E-Tag", `"${item.uuid}"`)
 			res.set("Last-Modified", new Date(item.lastModified).toUTCString())

@@ -1,7 +1,8 @@
 import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
-import { normalizeKey, streamToXML, promiseAllSettledChunked } from "../utils"
+import { streamToXML, promiseAllSettledChunked, extractKeyAndBucketFromRequestParams } from "../utils"
+import pathModule from "path"
 import { Readable } from "stream"
 
 export type DeleteObjectsXML = {
@@ -17,16 +18,24 @@ export class DeleteObjects {
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
 		try {
-			if (!req.url.includes("?delete") || !req.rawBody) {
+			if (!req.url.includes("?delete") || typeof req.decodedBody === "undefined") {
 				next()
 
 				return
 			}
 
-			const xml = await streamToXML<DeleteObjectsXML>(Readable.from(req.rawBody))
+			const { bucket } = extractKeyAndBucketFromRequestParams(req)
+
+			if (!bucket) {
+				await Responses.error(res, 404, "NoSuchBucket", "Bucket not found.")
+
+				return
+			}
+
+			const xml = await streamToXML<DeleteObjectsXML>(Readable.from(req.decodedBody))
 
 			if (!xml || !xml.Delete || !xml.Delete.Object) {
-				await Responses.error(res, 400, "BadRequest", "Invalid delete XML.")
+				await Responses.error(res, 400, "BadRequest", "Malformed XML request body.")
 
 				return
 			}
@@ -39,13 +48,18 @@ export class DeleteObjects {
 				objects.map(
 					object =>
 						new Promise<void>(resolve => {
-							const normalizedKey = normalizeKey(object.Key)
+							const path = pathModule.posix.join(bucket, object.Key)
+							const normalizedKey = path.startsWith("/") ? path.slice(1) : path
 
 							this.server
-								.getObject(normalizedKey)
+								.getObject(path)
 								.then(obj => {
+									const key = `${normalizedKey}${obj.exists && obj.stats.type === "directory" ? "/" : ""}`
+
 									if (!obj.exists) {
-										deleted.push({ Key: object.Key })
+										deleted.push({
+											Key: key
+										})
 
 										resolve()
 
@@ -55,17 +69,19 @@ export class DeleteObjects {
 									this.server.sdk
 										.fs()
 										.unlink({
-											path: normalizedKey,
+											path,
 											permanent: false
 										})
 										.then(() => {
-											deleted.push({ Key: object.Key })
+											deleted.push({
+												Key: key
+											})
 
 											resolve()
 										})
 										.catch(() => {
 											errors.push({
-												Key: object.Key,
+												Key: key,
 												Code: "InternalError",
 												Message: "Internal server error."
 											})
@@ -75,7 +91,7 @@ export class DeleteObjects {
 								})
 								.catch(() => {
 									errors.push({
-										Key: object.Key,
+										Key: normalizedKey,
 										Code: "InternalError",
 										Message: "Internal server error."
 									})

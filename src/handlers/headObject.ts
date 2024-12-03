@@ -1,7 +1,7 @@
 import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
-import { parseByteRange, extractKeyFromRequestParams } from "../utils"
+import { extractKeyAndBucketFromRequestParams } from "../utils"
 import mimeTypes from "mime-types"
 
 export class HeadObject {
@@ -17,14 +17,15 @@ export class HeadObject {
 				return
 			}
 
-			if (typeof req.params.key !== "string" || req.params.key.length === 0) {
+			const { key, bucket, path } = extractKeyAndBucketFromRequestParams(req)
+
+			if (!key || !bucket || !path) {
 				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
 
 				return
 			}
 
-			const key = extractKeyFromRequestParams(req)
-			const object = await this.server.getObject(key)
+			const object = await this.server.getObject(path)
 
 			if (!object.exists || object.stats.type === "directory") {
 				await Responses.error(res, 404, "NoSuchKey", "The specified key does not exist.")
@@ -33,35 +34,13 @@ export class HeadObject {
 			}
 
 			const mimeType = mimeTypes.lookup(object.stats.name) || "application/octet-stream"
-			const totalLength = object.stats.size
-			const range = req.headers.range || req.headers["content-range"]
-			let start = 0
-			let end = totalLength - 1
 
 			res.set("Content-Type", mimeType)
 			res.set("Accept-Ranges", "bytes")
 			res.set("Last-Modified", new Date(object.stats.mtimeMs).toUTCString())
 			res.set("E-Tag", `"${object.stats.uuid}"`)
-
-			if (range) {
-				const parsedRange = parseByteRange(range, totalLength)
-
-				if (!parsedRange) {
-					res.status(400).end()
-
-					return
-				}
-
-				start = parsedRange.start
-				end = parsedRange.end
-
-				res.status(206)
-				res.set("Content-Range", `bytes ${start}-${end}/${totalLength}`)
-				res.set("Content-Length", (end - start + 1).toString())
-			} else {
-				res.status(200)
-				res.set("Content-Length", object.stats.size.toString())
-			}
+			res.set("Content-Length", object.stats.size.toString())
+			res.status(200)
 
 			await new Promise<void>(resolve => {
 				res.end(() => {

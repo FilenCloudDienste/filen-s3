@@ -193,6 +193,39 @@ Due to the underlying storage most methods are impossible to implement, though w
     </tr>
     <tr>
       <td>
+        CreateBucket
+      </td>
+      <td>
+        ✅
+      </td>
+      <td>
+        &nbsp;
+      </td>
+    </tr>
+    <tr>
+      <td>
+        DeleteBucket
+      </td>
+      <td>
+        ✅
+      </td>
+      <td>
+        &nbsp;
+      </td>
+    </tr>
+    <tr>
+      <td>
+        GetBucketLocation
+      </td>
+      <td>
+        ✅
+      </td>
+      <td>
+        &nbsp;
+      </td>
+    </tr>
+    <tr>
+      <td>
         HeadBucket
       </td>
       <td>
@@ -280,6 +313,8 @@ Due to the underlying storage most methods are impossible to implement, though w
     </tr>
   </tbody>
 </table>
+
+<small>Presigned URLs are not yet supported.</small>
 
 <small>\* An objects ETag is always its UUID. Since Filen is fully end-to-end encrypted there is no way to know the real MD5 file hash.</small>
 

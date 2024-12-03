@@ -25,12 +25,14 @@ export class Responses {
 
 		const response = this.xmlBuilder.buildObject({
 			ListAllMyBucketsResult: {
-				Buckets: buckets.map(bucket => ({
-					Bucket: {
+				$: { xmlns: "http://s3.amazonaws.com/doc/2006-03-01/" },
+				Buckets: {
+					Bucket: buckets.map(bucket => ({
 						CreationDate: new Date(bucket.creationDate).toISOString(),
-						Name: bucket.name
-					}
-				})),
+						Name: bucket.name,
+						BucketRegion: "filen"
+					}))
+				},
 				Owner: {
 					ID: crypto.createHash("sha256").update(owner.id).digest("hex"),
 					DisplayName: ""
@@ -39,7 +41,8 @@ export class Responses {
 		})
 
 		res.set("Content-Type", "application/xml; charset=utf-8")
-		res.set("Content-Length", Buffer.from(response, "utf-8").byteLength.toString())
+		res.set("Content-Length", Buffer.byteLength(response).toString())
+		res.set("Date", new Date().toUTCString())
 		res.status(200)
 
 		await new Promise<void>(resolve => {
@@ -62,7 +65,8 @@ export class Responses {
 		})
 
 		res.set("Content-Type", "application/xml; charset=utf-8")
-		res.set("Content-Length", Buffer.from(response, "utf-8").byteLength.toString())
+		res.set("Content-Length", Buffer.byteLength(response).toString())
+		res.set("Date", new Date().toUTCString())
 		res.status(status)
 
 		await new Promise<void>(resolve => {
@@ -72,7 +76,14 @@ export class Responses {
 		})
 	}
 
-	public static async listObjectsV2(res: Response, prefix: string, objects: FSStatsObject[], commonPrefixes: string[]): Promise<void> {
+	public static async listObjectsV2(
+		res: Response,
+		prefix: string,
+		objects: FSStatsObject[],
+		commonPrefixes: string[],
+		bucket: string,
+		delimiter: string
+	): Promise<void> {
 		if (res.headersSent) {
 			return
 		}
@@ -81,7 +92,7 @@ export class Responses {
 			ListBucketResult: {
 				IsTruncated: false,
 				Contents: objects.map(object => ({
-					Key: object.path.slice(1),
+					Key: object.path,
 					LastModified: new Date(object.mtimeMs).toISOString(),
 					Size: object.size.toString(),
 					ETag: `"${object.uuid}"`,
@@ -93,12 +104,15 @@ export class Responses {
 				})),
 				KeyCount: objects.length.toString(),
 				Prefix: prefix,
-				Delimeter: "/"
+				Delimeter: delimiter,
+				MaxKeys: 1000000,
+				Name: bucket
 			}
 		})
 
 		res.set("Content-Type", "application/xml; charset=utf-8")
-		res.set("Content-Length", Buffer.from(response, "utf-8").byteLength.toString())
+		res.set("Content-Length", Buffer.byteLength(response).toString())
+		res.set("Date", new Date().toUTCString())
 		res.status(200)
 
 		await new Promise<void>(resolve => {
@@ -121,8 +135,9 @@ export class Responses {
 		})
 
 		res.set("Content-Type", "application/xml; charset=utf-8")
-		res.set("Content-Length", Buffer.from(response, "utf-8").byteLength.toString())
+		res.set("Content-Length", Buffer.byteLength(response).toString())
 		res.set("E-Tag", `"${result.eTag}"`)
+		res.set("Date", new Date().toUTCString())
 		res.status(200)
 
 		await new Promise<void>(resolve => {
@@ -155,7 +170,31 @@ export class Responses {
 		})
 
 		res.set("Content-Type", "application/xml; charset=utf-8")
-		res.set("Content-Length", Buffer.from(response, "utf-8").byteLength.toString())
+		res.set("Content-Length", Buffer.byteLength(response).toString())
+		res.set("Date", new Date().toUTCString())
+		res.status(200)
+
+		await new Promise<void>(resolve => {
+			res.end(response, () => {
+				resolve()
+			})
+		})
+	}
+
+	public static async getBucketLocation(res: Response): Promise<void> {
+		if (res.headersSent) {
+			return
+		}
+
+		const response = this.xmlBuilder.buildObject({
+			LocationConstraint: {
+				LocationConstraint: "filen"
+			}
+		})
+
+		res.set("Content-Type", "application/xml; charset=utf-8")
+		res.set("Content-Length", Buffer.byteLength(response).toString())
+		res.set("Date", new Date().toUTCString())
 		res.status(200)
 
 		await new Promise<void>(resolve => {
@@ -171,6 +210,7 @@ export class Responses {
 		}
 
 		res.set("Content-Length", "0")
+		res.set("Date", new Date().toUTCString())
 		res.status(200)
 
 		await new Promise<void>(resolve => {
@@ -186,6 +226,7 @@ export class Responses {
 		}
 
 		res.set("Content-Length", "0")
+		res.set("Date", new Date().toUTCString())
 		res.status(204)
 
 		await new Promise<void>(resolve => {
@@ -201,6 +242,7 @@ export class Responses {
 		}
 
 		res.set("Content-Length", "0")
+		res.set("Date", new Date().toUTCString())
 		res.status(400)
 
 		await new Promise<void>(resolve => {

@@ -1,34 +1,41 @@
 import { type Request, type Response, type NextFunction } from "express"
-import crypto from "crypto"
-import Responses from "../responses"
 
-export default function body(req: Request, res: Response, next: NextFunction): void {
-	const hash = crypto.createHash("sha256")
-	let size = 0
-	const chunks: Buffer[] = []
+export default function body(req: Request, _: Response, next: NextFunction): void {
+	const decodedChunks: Buffer[] = []
+	const rawChunks: Buffer[] = []
 
-	req.on("data", async chunk => {
-		try {
-			if (chunk instanceof Buffer) {
-				size += chunk.byteLength
+	req.rawBody = Buffer.from([])
+	req.decodedBody = Buffer.from([])
+	req.bodySize = 0
 
-				chunks.push(chunk)
-				hash.update(chunk)
+	req.on("data", (chunk: Buffer) => {
+		rawChunks.push(chunk)
+
+		if (req.headers["x-amz-content-sha256"] === "STREAMING-AWS4-HMAC-SHA256-PAYLOAD") {
+			const chunkStr = chunk.toString("binary")
+			const segments = chunkStr.split("\r\n").filter(segment => segment.length > 0)
+
+			for (const segment of segments) {
+				if (segment.includes(";chunk-signature=")) {
+					continue
+				}
+
+				const segmentBuffer = Buffer.from(segment, "binary")
+
+				decodedChunks.push(segmentBuffer)
 			}
-		} catch {
-			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
 		}
 	})
 
 	req.on("end", () => {
-		try {
-			req.bodyHash = hash.digest("hex")
-			req.bodySize = size
-			req.rawBody = Buffer.concat(chunks)
+		req.rawBody = Buffer.concat(rawChunks)
+		req.decodedBody = decodedChunks.length === 0 ? req.rawBody : Buffer.concat(decodedChunks)
+		req.bodySize = req.decodedBody.byteLength
 
-			next()
-		} catch {
-			Responses.error(res, 500, "InternalError", "Internal server error.").catch(() => {})
-		}
+		next()
+	})
+
+	req.on("error", err => {
+		next(err)
 	})
 }

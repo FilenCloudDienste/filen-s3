@@ -128,6 +128,7 @@ console.log(`S3 server cluster started on ${endpoint}`)
 
 <b>Only methods listed here are currently implemented.</b>
 Due to the underlying storage most methods are impossible to implement, though we try to implement all "fundamental" needed methods.
+<b>Top level directories in your cloud are seen as buckets.</b>
 
 <table>
   <thead>
@@ -154,10 +155,9 @@ Due to the underlying storage most methods are impossible to implement, though w
       <td>
         <ul>
           <li>Only supports Prefix parameter.</li>
-          <li>Delimeter is always set to "/".</li>
-          <li>Depth is always 0.</li>
+          <li>Depth is always 0 if delimiter is "/", otherwise 10.</li>
           <li>EncodingType is always URL.</li>
-          <li>There are no Markers. The server always responds with all keys matching the Prefix.</li>
+          <li>There are no Markers. The server always responds with all keys matching the Prefix + Depth.</li>
           <li>*</li>
         </ul>
       </td>
@@ -172,10 +172,9 @@ Due to the underlying storage most methods are impossible to implement, though w
       <td>
         <ul>
           <li>Only supports Prefix parameter.</li>
-          <li>Delimeter is always set to "/".</li>
-          <li>Depth is always 0.</li>
+          <li>Depth is always 0 if delimiter is "/", otherwise 10.</li>
           <li>EncodingType is always URL.</li>
-          <li>There are no ContinuationTokens. The server always responds with all keys matching the Prefix.</li>
+          <li>There are no ContinuationTokens. The server always responds with all keys matching the Prefix + Depth.</li>
           <li>*</li>
         </ul>
       </td>

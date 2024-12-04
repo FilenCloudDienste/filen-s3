@@ -48,6 +48,48 @@ export class ListObjectsV2 {
 		return trimmed
 	}
 
+	/**
+	 * Read a cloud directory (recursively to a maximum depth).
+	 *
+	 * @private
+	 * @async
+	 * @param {string} path
+	 * @param {number} depth
+	 * @returns {Promise<string[]>}
+	 */
+	private async readdir(path: string, depth: number): Promise<string[]> {
+		if (depth <= 0) {
+			return await this.server.sdk.fs().readdir({ path })
+		}
+
+		const items: string[] = []
+
+		const traverse = async (currentPath: string, currentDepth: number): Promise<void> => {
+			if (currentDepth >= depth) {
+				return
+			}
+
+			const dir = await this.server.sdk.fs().readdir({ path: currentPath })
+
+			await promiseAllChunked(
+				dir.map(async item => {
+					const itemPath = pathModule.posix.join(currentPath, item)
+					const stats = await this.server.sdk.fs().stat({ path: itemPath })
+
+					items.push(itemPath.slice(path.length))
+
+					if (stats.type === "directory") {
+						await traverse(itemPath, currentDepth + 1)
+					}
+				})
+			)
+		}
+
+		await traverse(path, 0)
+
+		return items
+	}
+
 	public async handle(req: Request, res: Response): Promise<void> {
 		try {
 			if (req.url.includes("?location")) {
@@ -85,12 +127,12 @@ export class ListObjectsV2 {
 			const dirnameStats = await this.server.getObject(dirname)
 
 			if (!dirnameStats.exists) {
-				await Responses.listObjectsV2(res, params.prefix, [], [], bucket)
+				await Responses.listObjectsV2(res, params.prefix, [], [], bucket, params.delimiter)
 
 				return
 			}
 
-			const topLevelDirContent = await this.server.sdk.fs().readdir({ path: dirname, recursive: params.delimiter.length === 0 })
+			const topLevelDirContent = await this.readdir(dirname, params.delimiter.length === 0 ? 10 : 0)
 			const topLevelItems: string[] = []
 
 			for (const item of topLevelDirContent) {
@@ -105,23 +147,15 @@ export class ListObjectsV2 {
 
 			const objects: FSStatsObject[] = (
 				await promiseAllChunked(
-					topLevelItems.map(
-						item =>
-							new Promise<FSStatsObject>((resolve, reject) => {
-								const path = `/${pathModule.posix.join(dirname, item)}`
+					topLevelItems.map(async item => {
+						const path = pathModule.posix.join(dirname, item)
+						const stats = await this.server.sdk.fs().stat({ path })
 
-								this.server.sdk
-									.fs()
-									.stat({ path })
-									.then(stats => {
-										resolve({
-											...stats,
-											path: path.replace(`/${bucket}/`, "").slice(1)
-										})
-									})
-									.catch(reject)
-							})
-					)
+						return {
+							...stats,
+							path: path.startsWith(`/${bucket}/`) ? path.slice(`/${bucket}/`.length) : path
+						}
+					})
 				)
 			).sort((a, b) => a.path.length - b.path.length)
 

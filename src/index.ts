@@ -254,12 +254,6 @@ export class S3Server {
 			})
 		)
 
-		this.server.use((req, res, next) => {
-			console.log(req.method, req.url)
-
-			next()
-		})
-
 		this.server.use(body)
 		this.server.use(new Auth(this).handle)
 

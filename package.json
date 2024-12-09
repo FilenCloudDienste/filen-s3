@@ -1,6 +1,6 @@
 {
 	"name": "@filen/s3",
-	"version": "0.2.49",
+	"version": "0.2.50",
 	"description": "Filen S3",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
@@ -52,7 +52,7 @@
 		"typescript": "^5.3.3"
 	},
 	"dependencies": {
-		"@filen/sdk": "^0.1.189",
+		"@filen/sdk": "^0.1.191",
 		"aws-sdk": "^2.1692.0",
 		"aws4-express": "github:FilenCloudDienste/aws4-express",
 		"body-parser": "^1.20.2",

@@ -313,6 +313,8 @@ Due to the underlying storage most methods are impossible to implement, though w
   </tbody>
 </table>
 
+Multipart uploads are not supported. `putObject` requests are fully buffered in memory. Make sure to not overwhelm your system memory limit.
+
 <small>Presigned URLs are not yet supported.</small>
 
 <small>\* An objects ETag is always its UUID. Since Filen is fully end-to-end encrypted there is no way to know the real MD5 file hash.</small>

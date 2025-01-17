@@ -1,6 +1,6 @@
 import { type Request, type Response, type NextFunction } from "express"
 import type Server from "../"
-import { awsVerify } from "aws4-express"
+import { awsVerify } from "@filen/aws4-express"
 
 export type AuthDetails = {
 	accessKeyId: string

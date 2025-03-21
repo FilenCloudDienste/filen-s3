@@ -1,6 +1,6 @@
 {
 	"name": "@filen/s3",
-	"version": "0.2.53",
+	"version": "0.2.54",
 	"description": "Filen S3",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
@@ -53,7 +53,7 @@
 	},
 	"dependencies": {
 		"@filen/aws4-express": "^0.10.2",
-		"@filen/sdk": "^0.1.193",
+		"@filen/sdk": "^0.2.2",
 		"aws-sdk": "^2.1692.0",
 		"body-parser": "^1.20.2",
 		"dayjs": "^1.11.11",

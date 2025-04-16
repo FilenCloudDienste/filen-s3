@@ -19,7 +19,7 @@ export class DeleteObjects {
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
 		try {
-			const isQueryAllowed = validateQuery(req.query, { delete: { required: true, anyValue: true }, "x-id": "DeleteObject" })
+			const isQueryAllowed = validateQuery(req.query, { delete: { required: true, anyValue: true }, "x-id": "DeleteObjects" })
 			if (!isQueryAllowed || typeof req.decodedBody === "undefined") {
 				next()
 

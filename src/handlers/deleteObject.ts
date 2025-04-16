@@ -2,6 +2,7 @@ import { type Request, type Response, type NextFunction } from "express"
 import Responses from "../responses"
 import type Server from "../"
 import { extractKeyAndBucketFromRequestParams } from "../utils"
+import { validateQuery } from "../validate-query"
 
 export class DeleteObject {
 	public constructor(private readonly server: Server) {
@@ -10,7 +11,8 @@ export class DeleteObject {
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
 		try {
-			if (req.url.includes("?")) {
+			const isQueryAllowed = validateQuery(req.query, { "x-id": "DeleteObject" })
+			if (!isQueryAllowed) {
 				next()
 
 				return

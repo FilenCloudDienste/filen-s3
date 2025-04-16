@@ -5,6 +5,7 @@ import { Readable } from "stream"
 import { type ReadableStream as ReadableStreamWebType } from "stream/web"
 import mimeTypes from "mime-types"
 import { parseByteRange, extractKeyAndBucketFromRequestParams } from "../utils"
+import { validateQuery } from "../validate-query"
 
 export class GetObject {
 	public constructor(private readonly server: Server) {
@@ -13,7 +14,8 @@ export class GetObject {
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
 		try {
-			if (req.url.includes("?")) {
+			const isQueryAllowed = validateQuery(req.query, { "x-id": "GetObject" })
+			if (!isQueryAllowed) {
 				next()
 
 				return

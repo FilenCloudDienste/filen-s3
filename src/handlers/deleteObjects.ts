@@ -4,6 +4,7 @@ import type Server from "../"
 import { streamToXML, promiseAllSettledChunked, extractKeyAndBucketFromRequestParams } from "../utils"
 import pathModule from "path"
 import { Readable } from "stream"
+import { validateQuery } from "../validate-query"
 
 export type DeleteObjectsXML = {
 	Delete?: {
@@ -18,7 +19,8 @@ export class DeleteObjects {
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
 		try {
-			if (!req.url.includes("?delete") || typeof req.decodedBody === "undefined") {
+			const isQueryAllowed = validateQuery(req.query, { delete: { required: true, anyValue: true }, "x-id": "DeleteObject" })
+			if (!isQueryAllowed || typeof req.decodedBody === "undefined") {
 				next()
 
 				return

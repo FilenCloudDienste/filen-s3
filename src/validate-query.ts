@@ -13,7 +13,7 @@ import { type Request } from "express"
 type AllowedValue = {
 	value: unknown
 	required?: boolean
-	minLength?: number
+	// minLength?: number
 	exact?: boolean
 }
 
@@ -31,7 +31,7 @@ export function validateQuery(
 	for (const [key, rule] of allowedEntries) {
 		if (isObject(rule)) {
 			if (rule.required && !(key in query)) return false
-			if (typeof rule.minLength === "number" && typeof query[key] === "string" && query[key].length < rule.minLength) return false
+			// if (typeof rule.minLength === "number" && typeof query[key] === "string" && (query[key] as string).length < rule.minLength) return false
 		}
 	}
 	const queryEntries = Object.entries(query)

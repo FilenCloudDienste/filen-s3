@@ -8,6 +8,9 @@ export class Responses {
 		xmldec: {
 			version: "1.0",
 			encoding: "utf-8"
+		},
+		renderOpts: {
+			pretty: false
 		}
 	})
 

@@ -4,6 +4,7 @@ import type Server from "../"
 import pathModule from "path"
 import { normalizeKey, extractKeyAndBucketFromRequestParams, convertTimestampToMs, isValidObjectKey } from "../utils"
 import { Readable } from "stream"
+import { validateQuery } from "../validate-query"
 
 export class PutObject {
 	public constructor(private readonly server: Server) {
@@ -95,7 +96,8 @@ export class PutObject {
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
 		try {
-			if (req.url.includes("?")) {
+			const isQueryAllowed = validateQuery(req.query, { "x-id": "PutObject" })
+			if (!isQueryAllowed) {
 				next()
 
 				return

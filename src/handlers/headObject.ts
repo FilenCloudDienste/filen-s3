@@ -3,6 +3,7 @@ import Responses from "../responses"
 import type Server from "../"
 import { extractKeyAndBucketFromRequestParams } from "../utils"
 import mimeTypes from "mime-types"
+import { validateQuery } from "../validate-query"
 
 export class HeadObject {
 	public constructor(private readonly server: Server) {
@@ -11,7 +12,8 @@ export class HeadObject {
 
 	public async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
 		try {
-			if (req.url.includes("?")) {
+			const isQueryAllowed = validateQuery(req.query, { "x-id": "HeadObject" })
+			if (!isQueryAllowed) {
 				next()
 
 				return
